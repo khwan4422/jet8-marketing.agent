@@ -44,7 +44,7 @@ st.markdown("""
     repeating-linear-gradient(0deg, #0b1030 0 1px, transparent 1px 26px),
     repeating-linear-gradient(90deg, #0b1030 0 1px, transparent 1px 26px),
     #070a22;
-  font-family:'Kanit',sans-serif;
+  font-family:'Kanit',sans-serif !important;
 }
 .block-container{ padding-top:2rem; }
 
