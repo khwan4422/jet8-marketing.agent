@@ -7,7 +7,10 @@
 
 import os
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# โซนเวลาไทย (UTC+7) — บังคับใช้เวลาไทยเสมอ แม้เซิร์ฟเวอร์คลาวด์จะอยู่ต่างประเทศ
+TH = timezone(timedelta(hours=7))
 
 st.set_page_config(page_title="MARKETING OPS v1.0", page_icon="👾", layout="wide")
 
@@ -162,7 +165,7 @@ def agent_row(member, status):
 st.markdown(f"""
 <div class="topbar">
   <span class="ttl">▣ MARKETING OPS v1.0</span>
-  <span class="clock">TIME {datetime.now().strftime('%H:%M')}</span>
+  <span class="clock">TIME {datetime.now(TH).strftime('%H:%M')}</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -228,7 +231,7 @@ if start:
 
     set_status("report", "working")
     report = f"""# 📋 รายงานการตลาด: {product}
-_สร้างโดยทีม Agent เมื่อ {datetime.now().strftime('%d/%m/%Y %H:%M')}_
+_สร้างโดยทีม Agent เมื่อ {datetime.now(TH).strftime('%d/%m/%Y %H:%M')}_
 
 ## 1. ข้อมูลตลาด (โดย Research Agent)
 
@@ -262,7 +265,7 @@ _สร้างโดยทีม Agent เมื่อ {datetime.now().strftim
         st.download_button(
             "⬇ DOWNLOAD REPORT (.md)",
             data=report,
-            file_name=f"report_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+            file_name=f"report_{datetime.now(TH).strftime('%Y%m%d_%H%M')}.md",
             mime="text/markdown",
             use_container_width=True,
         )
