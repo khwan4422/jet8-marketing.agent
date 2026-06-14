@@ -47,6 +47,7 @@ st.markdown("""
   font-family:'Kanit',sans-serif !important;
 }
 .block-container{ padding-top:2rem; }
+* { font-family:'Kanit',sans-serif !important; }
 
 /* ซ่อนแถบเครื่องมือ Streamlit (ปุ่ม Deploy + เมนู) ให้เห็น UI เต็มจอ */
 header[data-testid="stHeader"]{ display:none !important; }
