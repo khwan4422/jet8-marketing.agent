@@ -124,6 +124,40 @@ h1,h2,h3,p,.stMarkdown{ color:#dbe4ff; }
 """, unsafe_allow_html=True)
 
 
+# ---------- ระบบล็อกด้วยรหัสผ่าน 🔒 ----------
+# กันไม่ให้คนอื่นมาใช้กุญแจ API ของเราฟรีๆ
+def check_password():
+    # หา "รหัสที่ตั้งไว้" จาก Secrets (บนคลาวด์) หรือ .env (ในเครื่อง)
+    expected = None
+    try:
+        expected = st.secrets.get("APP_PASSWORD")
+    except Exception:
+        pass
+    if not expected:
+        expected = os.getenv("APP_PASSWORD")
+
+    # ถ้ายังไม่ได้ตั้งรหัสไว้เลย = ไม่ล็อก (ใช้งานได้ตามปกติ)
+    if not expected:
+        return
+
+    # ถ้าเคยใส่รหัสถูกแล้วใน session นี้ = ผ่านเลย
+    if st.session_state.get("authed"):
+        return
+
+    # ยังไม่ผ่าน → ขอรหัส
+    pwd = st.text_input("🔒 ใส่รหัสผ่านเพื่อเข้าใช้งาน", type="password")
+    if pwd == "":
+        st.stop()                       # ยังไม่พิมพ์ → รอ
+    if pwd == expected:
+        st.session_state.authed = True  # ถูก → จำไว้แล้วรีโหลด
+        st.rerun()
+    else:
+        st.error("❌ รหัสผ่านไม่ถูกต้อง")
+        st.stop()
+
+check_password()       # ← ด่านตรวจ ต้องผ่านก่อนถึงจะเห็นแอป
+
+
 # ---------- ฟังก์ชันวาดผี Pac-Man (SVG) ----------
 def ghost(color, size=44):
     return f"""<svg width="{size}" height="{size}" viewBox="0 0 36 34" shape-rendering="crispEdges">
