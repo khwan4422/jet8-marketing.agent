@@ -415,7 +415,7 @@ with t4:
                         name=ev_name, start_date=str(ev_start), end_date=str(ev_end),
                         purpose=ev_purpose, channel=ev_channel, notes=ev_notes,
                     )
-                    st.success(f"✅ บันทึก "{ev_name}" แล้ว!")
+                    st.success(f'✅ บันทึก "{ev_name}" แล้ว!')
                     st.rerun()
 
         with col2:
