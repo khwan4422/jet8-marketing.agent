@@ -1,173 +1,188 @@
 # ============================================================
-#  app.py — MARKETING OPS v0.3 🎮
-#  Tab 1: CONTENT MISSION  — Research + Content + QC
-#  Tab 2: NEWS PIPELINE    — News Scout → Analyst → Content + QC
-#  Agent 00: SUPERVISOR (Claude Opus) — ตรวจ QC ทุก output
+#  MARKETING OPS v2.0 — Jet8 Social Media Team Dashboard
+#  รันด้วย:  streamlit run app.py
+#  6 แท็บ: Planner | Research | Documents | Events | Content | Review
 # ============================================================
 
 import os
-import streamlit as st
+import json
 from datetime import datetime, timezone, timedelta
+import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
 
 TH = timezone(timedelta(hours=7))
 
-st.set_page_config(page_title="MARKETING OPS v0.3", page_icon="👾", layout="wide")
+# ── ตั้งค่าหน้า ───────────────────────────────────────────────────────────────
+st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="👾", layout="wide")
 
-# ── Secrets → Environment Variables (ต้องทำก่อน import agents) ──────────────
-try:
-    for key in ("ANTHROPIC_API_KEY", "SLACK_BOT_TOKEN", "SLACK_NEWS_CHANNEL_ID",
-                "SLACK_USER_ID", "APP_PASSWORD"):
+# ── โหลด Secrets (สำหรับ deploy บน Streamlit Cloud) ─────────────────────────
+for key in ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "SLACK_BOT_TOKEN",
+            "SLACK_CHANNEL_ID", "SLACK_NEWS_CHANNEL_ID", "CLICKUP_API_TOKEN",
+            "CLICKUP_TEAM_ID", "APP_PASSWORD"]:
+    try:
         if key in st.secrets:
             os.environ[key] = st.secrets[key]
+    except Exception:
+        pass
+
+# ── Import Agents (graceful — ไม่ crash ถ้าไฟล์หาย) ──────────────────────────
+try:
+    import agent as content_agent
+    CONTENT_OK = True
 except Exception:
-    pass
+    CONTENT_OK = False
 
-# ── Import Agents ─────────────────────────────────────────────────────────────
-import research_agent, agent, supervisor_agent
-from research_agent import research
-from agent import generate_content
-from supervisor_agent import review as qc_review
-import news_monitor
-import marketing_researcher
-from marketing_researcher import build_user_prompt, analyze_with_gemini
+try:
+    import supervisor_agent
+    REVIEW_OK = True
+except Exception:
+    REVIEW_OK = False
 
-# ── Session State ─────────────────────────────────────────────────────────────
-for key, default in [
-    ("tok_total",     0),
-    ("news_analysis", ""),
-    ("news_total",    0),
-]:
-    if key not in st.session_state:
-        st.session_state[key] = default
+try:
+    import news_monitor
+    NEWS_OK = True
+except Exception:
+    NEWS_OK = False
 
+try:
+    import marketing_researcher
+    RESEARCH_OK = True
+except Exception:
+    RESEARCH_OK = False
 
-# ════════════════════════════════════════════════════════════════════════════
-#  CSS — ธีมพิกเซลเรโทร
-# ════════════════════════════════════════════════════════════════════════════
+try:
+    import planner as planner_agent
+    PLANNER_OK = True
+except Exception:
+    PLANNER_OK = False
+
+try:
+    import document_researcher
+    DOC_OK = True
+except Exception:
+    DOC_OK = False
+
+try:
+    import event_tracker
+    EVENT_OK = True
+except Exception:
+    EVENT_OK = False
+
+# ── CSS — ธีมนีออน Retro ─────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Kanit:wght@400;600&display=swap');
 
-.stApp{
+.stApp {
   background:
-    linear-gradient(rgba(8,12,40,.96),rgba(8,12,40,.96)),
-    repeating-linear-gradient(0deg, #0b1030 0 1px, transparent 1px 26px),
-    repeating-linear-gradient(90deg, #0b1030 0 1px, transparent 1px 26px),
-    #070a22;
-  font-family:'Kanit',sans-serif;
+    linear-gradient(rgba(8,12,40,.97), rgba(8,12,40,.97)),
+    repeating-linear-gradient(0deg,  #0b1030 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(90deg, #0b1030 0 1px, transparent 1px 26px), #070a22;
+  font-family: 'Kanit', sans-serif;
 }
-.block-container{ padding-top:2rem; }
-header[data-testid="stHeader"]{ display:none !important; }
-[data-testid="stToolbar"]{ display:none !important; }
-.stDeployButton{ display:none !important; }
-#MainMenu{ visibility:hidden; }
-footer{ visibility:hidden; }
+.block-container { padding-top: 1.5rem; }
+header[data-testid="stHeader"], [data-testid="stToolbar"],
+.stDeployButton, #MainMenu, footer { display: none !important; visibility: hidden; }
 
-.topbar{
-  display:flex; justify-content:space-between; align-items:center;
-  border:2px solid #22d3ee; border-radius:8px; padding:10px 18px;
-  background:#0a1140; box-shadow:0 0 14px rgba(34,211,238,.35), inset 0 0 18px rgba(34,211,238,.12);
-  margin-bottom:14px;
+/* Top bar */
+.topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  border: 2px solid #22d3ee; border-radius: 8px; padding: 10px 18px;
+  background: #0a1140;
+  box-shadow: 0 0 14px rgba(34,211,238,.35), inset 0 0 18px rgba(34,211,238,.12);
+  margin-bottom: 16px;
 }
-.topbar .ttl{ font-family:'Press Start 2P'; color:#22d3ee; font-size:.95rem; letter-spacing:1px;
-  text-shadow:0 0 8px rgba(34,211,238,.8); }
-.topbar .clock{ font-family:'Press Start 2P'; color:#a3e635; font-size:.85rem;
-  border:2px solid #a3e635; border-radius:6px; padding:5px 10px; text-shadow:0 0 8px rgba(163,230,53,.7); }
+.topbar .ttl { font-family: 'Press Start 2P'; color: #22d3ee; font-size: .9rem;
+  text-shadow: 0 0 8px rgba(34,211,238,.8); }
+.topbar .clock { font-family: 'Press Start 2P'; color: #a3e635; font-size: .8rem;
+  border: 2px solid #a3e635; border-radius: 6px; padding: 5px 10px;
+  text-shadow: 0 0 8px rgba(163,230,53,.7); }
 
-.panel{
-  border:2px solid #3b82f6; border-radius:8px; background:#0a0f33;
-  box-shadow:0 0 12px rgba(59,130,246,.3), inset 0 0 16px rgba(59,130,246,.08);
-  padding:14px; height:100%;
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+  background: #0a1140; border-radius: 8px; padding: 4px;
+  border: 2px solid #1e3a8a; gap: 4px;
 }
-.panel-title{ font-family:'Press Start 2P'; font-size:.7rem; color:#67e8f9;
-  letter-spacing:1px; margin-bottom:14px; text-shadow:0 0 6px rgba(103,232,249,.7); }
-
-.agent-row{
-  display:flex; align-items:center; gap:12px; padding:10px;
-  border:2px solid #1e3a8a; border-radius:8px; margin-bottom:12px; background:#0b1240;
+.stTabs [data-baseweb="tab"] {
+  font-family: 'Press Start 2P'; font-size: .58rem; color: #7c8cc4;
+  background: transparent; border: none; border-radius: 6px;
+  padding: 10px 14px; letter-spacing: .5px;
 }
-.agent-row.working{ border-color:#a3e635; box-shadow:0 0 12px rgba(163,230,53,.45); }
-.agent-row.done{ border-color:#22d3ee; }
-.agent-row.supervisor{ border-color:#fbbf24; background:#130f00; }
-.agent-row.supervisor.working{ border-color:#fbbf24; box-shadow:0 0 16px rgba(251,191,36,.6); }
-.agent-row.supervisor.done{ border-color:#fbbf24; box-shadow:0 0 12px rgba(251,191,36,.4); }
-.agent-row .num{ font-family:'Press Start 2P'; font-size:.62rem; color:#fbbf24; }
-.agent-row .ghost{ animation:float 2.2s ease-in-out infinite; }
-.agent-row.working .ghost{ animation:bob .5s ease-in-out infinite; }
-.agent-row .info{ flex:1; line-height:1.25; }
-.agent-row .role{ font-family:'Press Start 2P'; font-size:.6rem; color:#e0e7ff; }
-.agent-row .name{ color:#7c8cc4; font-size:.82rem; }
-.agent-row .stat{ font-family:'VT323'; font-size:1.15rem; letter-spacing:1px; }
-.stat.idle{ color:#64748b; } .stat.working{ color:#a3e635; } .stat.done{ color:#22d3ee; }
-.dot{ width:14px; height:14px; border-radius:50%; }
-.dot.on{ background:#22c55e; box-shadow:0 0 10px #22c55e; animation:blink 1.1s infinite; }
-.dot.off{ background:#334155; }
-
-.qc-panel{
-  border:2px solid #fbbf24; border-radius:8px; background:#130f00;
-  box-shadow:0 0 14px rgba(251,191,36,.3), inset 0 0 16px rgba(251,191,36,.06);
-  padding:16px; margin-top:16px;
+.stTabs [aria-selected="true"] {
+  background: #22d3ee !important; color: #07122e !important;
+  box-shadow: 0 0 12px rgba(34,211,238,.5);
 }
-.qc-title{ font-family:'Press Start 2P'; font-size:.7rem; color:#fbbf24;
-  letter-spacing:1px; margin-bottom:12px; text-shadow:0 0 6px rgba(251,191,36,.7); }
+.stTabs [data-baseweb="tab-panel"] { padding-top: 16px; }
 
-@keyframes float{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
-@keyframes bob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
-@keyframes blink{ 0%,100%{opacity:1} 50%{opacity:.35} }
-
-.bigstat{ font-family:'Press Start 2P'; color:#a3e635; font-size:1.1rem;
-  text-shadow:0 0 8px rgba(163,230,53,.7); }
-.minor{ font-family:'VT323'; color:#67e8f9; font-size:1.2rem; }
-.flow{ font-family:'Press Start 2P'; color:#22d3ee; font-size:.8rem; letter-spacing:2px; }
-.bridge-title{ font-family:'Press Start 2P'; font-size:.75rem; color:#a3e635;
-  letter-spacing:1px; text-shadow:0 0 6px rgba(163,230,53,.7); }
-
-.statusbar{ display:flex; gap:10px; margin-top:14px; }
-.statusbar .cell{ flex:1; text-align:center; }
-
-.stButton>button{
-  background:#0a1140; color:#22d3ee; border:2px solid #22d3ee; border-radius:8px;
-  font-family:'Press Start 2P'; font-size:.7rem; padding:14px 0; letter-spacing:1px;
-  box-shadow:0 0 12px rgba(34,211,238,.4); text-shadow:0 0 6px rgba(34,211,238,.8);
+/* Panel cards */
+.panel {
+  border: 2px solid #3b82f6; border-radius: 8px; background: #0a0f33;
+  box-shadow: 0 0 12px rgba(59,130,246,.25), inset 0 0 16px rgba(59,130,246,.06);
+  padding: 16px; margin-bottom: 12px;
 }
-.stButton>button:hover{ background:#22d3ee; color:#07122e; }
-.stTextInput>div>div>input, .stTextArea textarea{
-  background:#0b1240; color:#e0e7ff; border:2px solid #3b82f6; border-radius:8px; font-family:'Kanit';
+.panel-title {
+  font-family: 'Press Start 2P'; font-size: .65rem; color: #67e8f9;
+  letter-spacing: 1px; margin-bottom: 12px; text-shadow: 0 0 6px rgba(103,232,249,.7);
 }
-.stTextInput label, .stTextArea label{ color:#67e8f9 !important; font-weight:600; }
-.stSelectbox>div>div{ background:#0b1240; color:#e0e7ff; border:2px solid #3b82f6; border-radius:8px; }
-.stSelectbox label{ color:#67e8f9 !important; font-weight:600; }
-h1,h2,h3,p,.stMarkdown{ color:#dbe4ff; }
 
-.stTabs [data-baseweb="tab-list"]{ background:#0a0f33; border-bottom:2px solid #3b82f6; gap:8px; }
-.stTabs [data-baseweb="tab"]{
-  font-family:'Press Start 2P'; font-size:.65rem; color:#64748b;
-  background:#0b1240; border:2px solid #1e3a8a; border-radius:8px 8px 0 0; padding:10px 16px;
+/* Typography */
+h1, h2, h3, p, li, .stMarkdown { color: #dbe4ff !important; }
+.stMarkdown h2 { color: #67e8f9 !important; border-bottom: 1px solid #1e3a8a; padding-bottom: 4px; }
+.stMarkdown h3 { color: #a3e635 !important; }
+.label { font-family: 'VT323'; font-size: 1.15rem; color: #67e8f9; }
+.bigstat { font-family: 'Press Start 2P'; color: #a3e635; font-size: 1rem;
+  text-shadow: 0 0 8px rgba(163,230,53,.7); }
+.minor { font-family: 'VT323'; color: #67e8f9; font-size: 1.1rem; }
+.warn { font-family: 'VT323'; color: #fbbf24; font-size: 1.05rem; }
+
+/* Buttons */
+.stButton > button {
+  background: #0a1140; color: #22d3ee; border: 2px solid #22d3ee;
+  border-radius: 8px; font-family: 'Press Start 2P'; font-size: .65rem;
+  padding: 12px 0; letter-spacing: 1px;
+  box-shadow: 0 0 10px rgba(34,211,238,.3);
 }
-.stTabs [aria-selected="true"]{
-  color:#22d3ee !important; border-color:#22d3ee !important;
-  background:#0a1140 !important; text-shadow:0 0 6px rgba(34,211,238,.7);
+.stButton > button:hover { background: #22d3ee; color: #07122e; }
+
+/* Inputs */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div > div {
+  background: #0b1240 !important; color: #e0e7ff !important;
+  border: 2px solid #3b82f6 !important; border-radius: 8px !important;
+  font-family: 'Kanit' !important;
 }
+.stTextInput label, .stTextArea label, .stSelectbox label,
+.stDateInput label, .stNumberInput label, .stRadio label { color: #67e8f9 !important; font-weight: 600; }
+
+/* Event countdown badges */
+.badge-red    { background:#7f1d1d; color:#fca5a5; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+.badge-orange { background:#7c2d12; color:#fdba74; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+.badge-yellow { background:#713f12; color:#fde047; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+.badge-green  { background:#14532d; color:#86efac; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+.badge-blue   { background:#1e3a5f; color:#93c5fd; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+.badge-gray   { background:#374151; color:#9ca3af; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+
+/* Task/doc rows */
+.task-row {
+  border: 1px solid #1e3a8a; border-radius: 8px; padding: 10px 14px;
+  margin-bottom: 8px; background: #0b1240;
+}
+.task-row:hover { border-color: #22d3ee; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ════════════════════════════════════════════════════════════════════════════
-#  ล็อกรหัสผ่าน
-# ════════════════════════════════════════════════════════════════════════════
+# ── Auth ──────────────────────────────────────────────────────────────────────
 def check_password():
-    expected = None
-    try:
-        expected = st.secrets.get("APP_PASSWORD")
-    except Exception:
-        pass
-    if not expected:
-        expected = os.getenv("APP_PASSWORD")
+    expected = os.getenv("APP_PASSWORD")
     if not expected:
         return
     if st.session_state.get("authed"):
         return
-    pwd = st.text_input("🔒 ใส่รหัสผ่านเพื่อเข้าใช้งาน", type="password")
+    pwd = st.text_input("🔒 ใส่รหัสผ่าน", type="password")
     if pwd == "":
         st.stop()
     if pwd == expected:
@@ -179,348 +194,359 @@ def check_password():
 
 check_password()
 
+# ── Session State ─────────────────────────────────────────────────────────────
+if "review_queue" not in st.session_state:
+    st.session_state.review_queue = []   # content รอ review
+if "tok_total" not in st.session_state:
+    st.session_state.tok_total = 0
 
-# ════════════════════════════════════════════════════════════════════════════
-#  SVG ผี Pac-Man
-# ════════════════════════════════════════════════════════════════════════════
-def ghost(color, size=44):
-    return f"""<svg width="{size}" height="{size}" viewBox="0 0 36 34" shape-rendering="crispEdges">
-      <path d="M3 17 a15 15 0 0 1 30 0 v15 l-5 -4 l-5 4 l-5 -4 l-5 4 l-5 -4 z"
-            fill="{color}" stroke="#0a0f33" stroke-width="1"/>
-      <rect x="9" y="11" width="7" height="9" rx="3.5" fill="#fff"/>
-      <rect x="20" y="11" width="7" height="9" rx="3.5" fill="#fff"/>
-      <rect x="12" y="14" width="4" height="4" fill="#1d4ed8"/>
-      <rect x="23" y="14" width="4" height="4" fill="#1d4ed8"/>
-    </svg>"""
-
-def agent_row_html(member, status):
-    stxt = {"idle": "[ STANDBY ]", "working": "[ WORKING ]", "done": "[ DONE ]"}[status]
-    dot  = "on" if status in ("working", "done") else "off"
-    extra = " supervisor" if member.get("supervisor") else ""
-    rowcls = (status if status in ("working", "done") else "") + extra
-    return f"""
-    <div class="agent-row {rowcls}">
-      <span class="num">{member['num']}</span>
-      <span class="ghost">{ghost(member['color'])}</span>
-      <span class="info">
-        <span class="role">{member['role']}</span><br>
-        <span class="name">{member['name']}</span><br>
-        <span class="stat {status}">{stxt}</span>
-      </span>
-      <span class="dot {dot}"></span>
-    </div>"""
-
-# ── Agent 00 — Supervisor (ใช้ร่วมกันทั้ง 2 tabs) ────────────────────────────
-SUPERVISOR = {
-    "key": "supervisor", "num": "00", "color": "#fbbf24",
-    "role": "SUPERVISOR", "name": "QC — Marketing Director",
-    "supervisor": True,
-}
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  แถบหัว
-# ════════════════════════════════════════════════════════════════════════════
+# ── Top Bar ───────────────────────────────────────────────────────────────────
+now_th = datetime.now(TH)
 st.markdown(f"""
 <div class="topbar">
-  <span class="ttl">▣ MARKETING OPS v0.3</span>
-  <span class="clock">TIME {datetime.now(TH).strftime('%H:%M')}</span>
+  <span class="ttl">▣ MARKETING OPS v2.0 — JET8</span>
+  <span class="clock">{now_th.strftime('%d/%m/%Y %H:%M')}</span>
 </div>
 """, unsafe_allow_html=True)
 
-
-tab1, tab2 = st.tabs(["🎯  CONTENT MISSION", "📰  NEWS PIPELINE"])
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  TAB 1 — Content Mission
-# ════════════════════════════════════════════════════════════════════════════
-with tab1:
-    TEAM_C = [
-        {"key": "supervisor", **SUPERVISOR},
-        {"key": "research",   "num": "01", "color": "#ef4444", "role": "RESEARCH",  "name": "ฝ่ายวิจัยตลาด"},
-        {"key": "content",    "num": "02", "color": "#f472b6", "role": "CONTENT",   "name": "ฝ่ายเขียนคอนเทนต์"},
-        {"key": "report",     "num": "03", "color": "#fb923c", "role": "REPORT",    "name": "ฝ่ายเรียบเรียงรายงาน"},
-    ]
-    cm = {m["key"]: m for m in TEAM_C}
-
-    product = st.text_input("🎯 สินค้า/บริการที่อยากทำการตลาด",
-                            placeholder="เช่น กาแฟดริปคั่วอ่อนสำหรับคนทำงานออฟฟิศ",
-                            key="product_input")
-    start_c = st.button("► START MISSION", type="primary", use_container_width=True, key="start_content")
-
-    lc, rc = st.columns([1, 1.4])
-
-    with lc:
-        st.markdown('<div class="panel"><div class="panel-title">▸ TEAM STATUS</div>', unsafe_allow_html=True)
-        cs = {m["key"]: st.empty() for m in TEAM_C}
-        for m in TEAM_C:
-            cs[m["key"]].markdown(agent_row_html(m, "idle"), unsafe_allow_html=True)
-        st.markdown(f'<div class="minor">AGENTS ONLINE &nbsp; {len(TEAM_C)}/{len(TEAM_C)}</div>', unsafe_allow_html=True)
-        c_tok = st.empty()
-        c_tok.markdown(f'<div class="minor">TOKENS (SESSION) &nbsp; {st.session_state.tok_total:,}</div></div>', unsafe_allow_html=True)
-
-    with rc:
-        st.markdown('<div class="panel"><div class="panel-title">▸ OUTPUT CONSOLE</div>', unsafe_allow_html=True)
-        c_out = st.container()
-        c_out.markdown('<div class="minor">// ระบบพร้อมทำงาน — กด START MISSION เพื่อเริ่ม</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown("""
-    <div class="panel" style="margin-top:14px;"><div class="statusbar">
-      <div class="cell"><div class="panel-title">SYSTEM</div><div class="minor">▮▮▮▮▮▮▮▮ OK</div></div>
-      <div class="cell"><div class="panel-title">FLOW</div><div class="flow">✉ → 📄 → 📊 → 👑</div></div>
-      <div class="cell"><div class="panel-title">ENGINE</div><div class="minor">CLAUDE API</div></div>
-      <div class="cell"><div class="panel-title">QC</div><div class="minor" style="color:#fbbf24;">OPUS 👑</div></div>
-    </div></div>""", unsafe_allow_html=True)
-
-    if start_c:
-        if not product.strip():
-            st.warning("กรอกชื่อสินค้า/บริการก่อนนะคะ 🥰")
-            st.stop()
-
-        c_out.markdown('<div class="minor">// กำลังประมวลผล... ⏳</div>', unsafe_allow_html=True)
-
-        # Agent 01 — Research
-        cs["research"].markdown(agent_row_html(cm["research"], "working"), unsafe_allow_html=True)
-        market_info = research(f"ข้อมูลตลาด เทรนด์ กลุ่มเป้าหมาย และคู่แข่ง ของ: {product}")
-        r_tok = research_agent.last_usage["total"]
-        cs["research"].markdown(agent_row_html(cm["research"], "done"), unsafe_allow_html=True)
-
-        # Agent 02 — Content
-        cs["content"].markdown(agent_row_html(cm["content"], "working"), unsafe_allow_html=True)
-        brief = f'เขียนโพสต์โซเชียลมีเดียโปรโมท "{product}" จากข้อมูลตลาดนี้:\n\n{market_info}'
-        post = generate_content(brief)
-        ct_tok = agent.last_usage["total"]
-        cs["content"].markdown(agent_row_html(cm["content"], "done"), unsafe_allow_html=True)
-
-        # Agent 03 — Report
-        cs["report"].markdown(agent_row_html(cm["report"], "working"), unsafe_allow_html=True)
-        report = f"""# 📋 รายงานการตลาด: {product}
-_สร้างโดยทีม Agent เมื่อ {datetime.now(TH).strftime('%d/%m/%Y %H:%M')}_
-
-## 1. ข้อมูลตลาด (โดย Research Agent)
-{market_info}
-
----
-
-## 2. โพสต์พร้อมใช้ (โดย Content Agent)
-{post}
-"""
-        cs["report"].markdown(agent_row_html(cm["report"], "done"), unsafe_allow_html=True)
-
-        # Agent 00 — Supervisor QC
-        cs["supervisor"].markdown(agent_row_html(SUPERVISOR, "working"), unsafe_allow_html=True)
-        qc_result = qc_review(post, content_type="content")
-        sup_tok = supervisor_agent.last_usage["total"]
-        cs["supervisor"].markdown(agent_row_html(SUPERVISOR, "done"), unsafe_allow_html=True)
-
-        run_total = r_tok + ct_tok + sup_tok
-        st.session_state.tok_total += run_total
-        c_tok.markdown(f'<div class="minor">TOKENS (SESSION) &nbsp; {st.session_state.tok_total:,}</div></div>', unsafe_allow_html=True)
-
-        c_out.empty()
-        with c_out:
-            st.markdown('<div class="bigstat">✔ MISSION COMPLETE</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="minor">🔢 Research {r_tok:,} + Content {ct_tok:,} + QC {sup_tok:,} = <b>{run_total:,}</b></div>', unsafe_allow_html=True)
-            st.markdown(report)
-            st.download_button("⬇ DOWNLOAD REPORT (.md)", data=report,
-                               file_name=f"report_{datetime.now(TH).strftime('%Y%m%d_%H%M')}.md",
-                               mime="text/markdown", use_container_width=True)
-
-        # QC Panel
-        st.markdown(f"""
-        <div class="qc-panel">
-          <div class="qc-title">👑 QC REPORT — SUPERVISOR (Agent 00)</div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown(qc_result)
+# ── Tabs ──────────────────────────────────────────────────────────────────────
+t1, t2, t3, t4, t5, t6 = st.tabs([
+    "📅 Planner",
+    "🔍 Research",
+    "📄 Documents",
+    "🗓️ Events",
+    "✍️ Content",
+    "✅ Review",
+])
 
 
-# ════════════════════════════════════════════════════════════════════════════
-#  TAB 2 — News Pipeline + Content Bridge
-# ════════════════════════════════════════════════════════════════════════════
-with tab2:
-    TEAM_N = [
-        {"key": "supervisor", **SUPERVISOR},
-        {"key": "scout",   "num": "04", "color": "#38bdf8", "role": "NEWS SCOUT", "name": "ฝ่ายสกรีนข่าว"},
-        {"key": "analyst", "num": "05", "color": "#c084fc", "role": "ANALYST",    "name": "ฝ่ายวิจัยการตลาด"},
-        {"key": "writer",  "num": "06", "color": "#f472b6", "role": "CONTENT",    "name": "ฝ่ายเขียนคอนเทนต์"},
-    ]
-    nm = {m["key"]: m for m in TEAM_N}
+# ════════════════════════════════════════════════════════════════
+#  TAB 1 — PLANNER
+# ════════════════════════════════════════════════════════════════
+with t1:
+    st.markdown('<div class="panel-title">📅 วางแผนธีมและตารางโพสต์รายเดือน</div>', unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="panel" style="margin-bottom:14px; border-color:#38bdf8;">
-      <div class="panel-title" style="color:#38bdf8;">▸ NEWS PIPELINE — นำเข้า-ส่งออก / Food / Pharma</div>
-      <div class="minor">Agent 04 ดึงข่าว 11 แหล่ง → Agent 05 วิเคราะห์ → Agent 06 เขียน Content → Agent 00 QC</div>
-    </div>
-    """, unsafe_allow_html=True)
+    if not PLANNER_OK:
+        st.error("❌ ไม่พบไฟล์ planner.py")
+    else:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            sel_month = st.selectbox("เดือน", list(range(1, 13)),
+                index=now_th.month - 1,
+                format_func=lambda m: planner_agent.THAI_MONTHS[m])
+            sel_year = st.number_input("ปี (ค.ศ.)", value=now_th.year, step=1,
+                min_value=2020, max_value=2030)
+            focus_text = st.text_area("โฟกัสพิเศษเดือนนี้ (optional)",
+                placeholder="เช่น งาน THAIFEX, กฎระเบียบ อย. ใหม่ ...", height=80)
 
-    start_n = st.button("► START NEWS PIPELINE", type="primary", use_container_width=True, key="start_news")
+            month_events = []
+            if EVENT_OK:
+                month_events = event_tracker.get_events_in_month(sel_month, sel_year)
+                if month_events:
+                    st.info(f"🗓️ พบ {len(month_events)} อีเวนต์ในเดือนนี้ จะนำไปประกอบแผนด้วย")
 
-    ln, rn = st.columns([1, 1.4])
+            gen_btn = st.button("► สร้างแผน", use_container_width=True)
 
-    with ln:
-        st.markdown('<div class="panel"><div class="panel-title" style="color:#38bdf8;">▸ NEWS TEAM</div>', unsafe_allow_html=True)
-        ns = {m["key"]: st.empty() for m in TEAM_N}
-        for m in TEAM_N:
-            ns[m["key"]].markdown(agent_row_html(m, "idle"), unsafe_allow_html=True)
-        slack_txt = "🟢 SLACK ON" if os.getenv("SLACK_BOT_TOKEN") else "⚪ SLACK OFF"
-        st.markdown(f'<div class="minor" style="margin-top:8px;">{slack_txt}</div><div class="minor">SOURCES &nbsp; 11 FEEDS</div></div>', unsafe_allow_html=True)
+        with col2:
+            if gen_btn:
+                with st.spinner("🤔 กำลังวางแผน..."):
+                    plan = planner_agent.generate_plan(
+                        month=sel_month, year=sel_year,
+                        focus=focus_text, events=month_events or None,
+                    )
+                st.session_state.tok_total += planner_agent.last_usage["total"]
+                st.markdown(plan)
+                st.download_button("⬇ ดาวน์โหลดแผน (.md)", data=plan,
+                    file_name=f"plan_{sel_year}_{sel_month:02d}.md", mime="text/markdown",
+                    use_container_width=True)
+                st.markdown(f'<div class="minor">🔢 Tokens: {planner_agent.last_usage["total"]:,}</div>',
+                    unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="minor">// เลือกเดือน แล้วกด "สร้างแผน"</div>',
+                    unsafe_allow_html=True)
 
-    with rn:
-        st.markdown('<div class="panel"><div class="panel-title" style="color:#38bdf8;">▸ NEWS CONSOLE</div>', unsafe_allow_html=True)
-        n_out = st.container()
-        n_out.markdown('<div class="minor">// รอคำสั่ง — กด START NEWS PIPELINE เพื่อเริ่ม</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="panel" style="margin-top:14px; border-color:#38bdf8;"><div class="statusbar">
-      <div class="cell"><div class="panel-title">SOURCES</div><div class="minor">🇹🇭 TH + 🌐 INT + 🍽️ F&P</div></div>
-      <div class="cell"><div class="panel-title">FLOW</div><div class="flow">📡→🤖→✍️→👑</div></div>
-      <div class="cell"><div class="panel-title">ENGINE</div><div class="minor">CLAUDE API</div></div>
-      <div class="cell"><div class="panel-title">QC</div><div class="minor" style="color:#fbbf24;">OPUS 👑</div></div>
-    </div></div>""", unsafe_allow_html=True)
+# ════════════════════════════════════════════════════════════════
+#  TAB 2 — RESEARCH
+# ════════════════════════════════════════════════════════════════
+with t2:
+    st.markdown('<div class="panel-title">🔍 ติดตามข่าวและเทรนด์อุตสาหกรรม</div>', unsafe_allow_html=True)
 
-    # ── รัน Pipeline ─────────────────────────────────────────────────────────
-    if start_n:
-        n_out.markdown('<div class="minor">// กำลังดึงข่าว... ⏳</div>', unsafe_allow_html=True)
+    if not NEWS_OK or not RESEARCH_OK:
+        st.error("❌ ไม่พบ news_monitor.py หรือ marketing_researcher.py")
+    else:
+        col1, col2 = st.columns(2)
 
-        ns["scout"].markdown(agent_row_html(nm["scout"], "working"), unsafe_allow_html=True)
-        try:
-            results_by_group, total_news = news_monitor.main()
-        except Exception as e:
-            n_out.error(f"❌ Agent 04 error: {e}")
-            st.stop()
-        ns["scout"].markdown(agent_row_html(nm["scout"], "done"), unsafe_allow_html=True)
+        with col1:
+            st.markdown('<div class="label">STEP 1 — ดึงข่าวใหม่</div>', unsafe_allow_html=True)
+            if st.button("► ดึงข่าว (News Monitor)", use_container_width=True):
+                with st.spinner("📡 กำลังดึงข่าว..."):
+                    results, total = news_monitor.main()
+                if total > 0:
+                    st.success(f"✅ พบข่าวใหม่ {total} รายการ — ส่ง Slack แล้ว")
+                    for group, arts in results.items():
+                        if arts:
+                            st.markdown(f"**{group}** ({len(arts)} รายการ)")
+                            for a in arts[:3]:
+                                st.markdown(f"- [{a['title']}]({a['url']})")
+                else:
+                    st.info("ℹ️ ไม่พบข่าวใหม่ในรอบนี้")
 
-        if total_news == 0:
-            n_out.empty()
-            with n_out:
-                st.markdown('<div class="bigstat" style="color:#fbbf24;">⚠ ไม่พบข่าวใหม่</div>', unsafe_allow_html=True)
-                st.markdown('<div class="minor">ข่าวทั้งหมดเคยสแกนไปแล้วในรอบก่อน</div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown('<div class="label">STEP 2 — วิเคราะห์เชิงธุรกิจ</div>', unsafe_allow_html=True)
+            if st.button("► วิเคราะห์ข่าว (Research Analyst)", use_container_width=True):
+                with st.spinner("🧠 กำลังวิเคราะห์..."):
+                    filepath = marketing_researcher.main()
+                if filepath:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        report_content = f.read()
+                    st.success(f"✅ บันทึกรายงานแล้ว: {filepath}")
+                    st.markdown(report_content)
+                    st.download_button("⬇ ดาวน์โหลดรายงาน", data=report_content,
+                        file_name=os.path.basename(filepath), mime="text/markdown",
+                        use_container_width=True)
+                else:
+                    st.warning("⚠️ ไม่มีข่าวให้วิเคราะห์ — รัน Step 1 ก่อน")
+
+
+# ════════════════════════════════════════════════════════════════
+#  TAB 3 — DOCUMENTS (ClickUp)
+# ════════════════════════════════════════════════════════════════
+with t3:
+    st.markdown('<div class="panel-title">📄 เอกสารและอัปเดตจาก ClickUp</div>', unsafe_allow_html=True)
+
+    if not DOC_OK:
+        st.error("❌ ไม่พบ document_researcher.py")
+    elif not document_researcher.is_configured():
+        st.warning("⚠️ ยังไม่ตั้งค่า ClickUp — เพิ่มใน .env:")
+        st.code("CLICKUP_API_TOKEN=pk_xxxxxxxxxxxx\nCLICKUP_TEAM_ID=xxxxxxxxx")
+        st.markdown("วิธีหา API Token: ClickUp → Settings → Apps → API Token")
+    else:
+        col1, col2 = st.columns([1, 2])
+
+        with col1:
+            days_back = st.slider("ดูย้อนหลัง (วัน)", 7, 90, 30)
+            search_kw = st.text_input("ค้นหา keyword (optional)",
+                placeholder="เช่น อย., import, regulation")
+            fetch_btn = st.button("► ดึงข้อมูลจาก ClickUp", use_container_width=True)
+
+        with col2:
+            if fetch_btn:
+                with st.spinner("🔄 กำลังดึงข้อมูล..."):
+                    if search_kw.strip():
+                        tasks = document_researcher.search_tasks(search_kw.strip())
+                        st.markdown(f"**ผลการค้นหา "{search_kw}"** ({len(tasks)} รายการ)")
+                    else:
+                        tasks = document_researcher.fetch_recent_tasks(days=days_back)
+                        st.markdown(f"**Tasks อัปเดตใน {days_back} วันที่ผ่านมา** ({len(tasks)} รายการ)")
+
+                for task in tasks:
+                    if "error" in task:
+                        st.error(f"❌ {task['error']}")
+                    else:
+                        url_part = f"[↗]({task['url']})" if task['url'] else ""
+                        st.markdown(f"""
+<div class="task-row">
+  <b>{task['name']}</b> {url_part}<br>
+  <span style="color:#7c8cc4;font-size:.85rem">
+    📁 {task['list_name']} &nbsp;|&nbsp; 🏷️ {task['status']} &nbsp;|&nbsp; 🕐 {task['updated_at']}
+  </span>
+</div>""", unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="minor">// กดปุ่มเพื่อดึงข้อมูลจาก ClickUp</div>',
+                    unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════════════════════════════
+#  TAB 4 — EVENTS
+# ════════════════════════════════════════════════════════════════
+with t4:
+    st.markdown('<div class="panel-title">🗓️ ติดตามอีเวนต์ที่สนใจ</div>', unsafe_allow_html=True)
+    st.markdown('<div class="warn">⚙️ Google Calendar integration: coming soon</div>',
+        unsafe_allow_html=True)
+
+    if not EVENT_OK:
+        st.error("❌ ไม่พบ event_tracker.py")
+    else:
+        col1, col2 = st.columns([1, 1.3])
+
+        with col1:
+            st.markdown('<div class="label">➕ เพิ่มอีเวนต์ใหม่</div>', unsafe_allow_html=True)
+            with st.form("add_event_form", clear_on_submit=True):
+                ev_name    = st.text_input("ชื่ออีเวนต์ *", placeholder="เช่น THAIFEX 2026")
+                ev_start   = st.date_input("วันเริ่มต้น *", value=now_th.date())
+                ev_end     = st.date_input("วันสิ้นสุด *",  value=now_th.date())
+                ev_purpose = st.text_area("เป้าประสงค์ *",
+                    placeholder="เช่น สร้าง connection, หาลูกค้าใหม่ในกลุ่ม Pharma", height=70)
+                ev_channel = st.selectbox("ช่องทางที่จะโพสต์",
+                    ["Facebook", "LinkedIn", "Facebook + LinkedIn", "เว็บไซต์", "ทุกช่องทาง", "—"])
+                ev_notes   = st.text_input("หมายเหตุ (optional)")
+                submitted  = st.form_submit_button("✅ บันทึกอีเวนต์", use_container_width=True)
+
+            if submitted:
+                if not ev_name or not ev_purpose:
+                    st.error("กรุณากรอกชื่ออีเวนต์และเป้าประสงค์")
+                else:
+                    event_tracker.add_event(
+                        name=ev_name, start_date=str(ev_start), end_date=str(ev_end),
+                        purpose=ev_purpose, channel=ev_channel, notes=ev_notes,
+                    )
+                    st.success(f"✅ บันทึก "{ev_name}" แล้ว!")
+                    st.rerun()
+
+        with col2:
+            st.markdown('<div class="label">📌 อีเวนต์ที่กำลังจะมา</div>', unsafe_allow_html=True)
+            upcoming = event_tracker.get_upcoming_events()
+
+            if not upcoming:
+                st.markdown('<div class="minor">// ยังไม่มีอีเวนต์ — เพิ่มทางซ้ายได้เลย</div>',
+                    unsafe_allow_html=True)
+            else:
+                for ev in upcoming:
+                    days = ev["days_until"]
+                    if days < 0:
+                        badge = f'<span class="badge-gray">ผ่านมา {abs(days)} วัน</span>'
+                    elif days == 0:
+                        badge = '<span class="badge-red">🔴 วันนี้!</span>'
+                    elif days <= 7:
+                        badge = f'<span class="badge-orange">🟠 อีก {days} วัน</span>'
+                    elif days <= 30:
+                        badge = f'<span class="badge-yellow">🟡 อีก {days} วัน</span>'
+                    else:
+                        badge = f'<span class="badge-blue">🔵 อีก {days} วัน</span>'
+
+                    channel_txt = f"📢 {ev['channel']}" if ev.get("channel") and ev["channel"] != "—" else ""
+                    st.markdown(f"""
+<div class="task-row">
+  {badge} &nbsp; <b>{ev['name']}</b><br>
+  <span style="color:#a3e635;font-size:.85rem">🗓️ {ev['start_date']} – {ev['end_date']}</span><br>
+  <span style="color:#dbe4ff;font-size:.9rem">🎯 {ev['purpose']}</span><br>
+  <span style="color:#7c8cc4;font-size:.85rem">{channel_txt}</span>
+</div>""", unsafe_allow_html=True)
+
+                    if st.button("🗑️ ลบ", key=f"del_{ev['id']}"):
+                        event_tracker.delete_event(ev["id"])
+                        st.rerun()
+
+
+# ════════════════════════════════════════════════════════════════
+#  TAB 5 — CONTENT
+# ════════════════════════════════════════════════════════════════
+with t5:
+    st.markdown('<div class="panel-title">✍️ เขียนคอนเทนต์การตลาด</div>', unsafe_allow_html=True)
+
+    if not CONTENT_OK:
+        st.error("❌ ไม่พบ agent.py")
+    else:
+        col1, col2 = st.columns([1, 1.3])
+
+        with col1:
+            ctype_label = st.radio("ประเภทคอนเทนต์",
+                ["Facebook Post", "LinkedIn Post", "คอนเทนต์เว็บไซต์"])
+            ctype_map = {
+                "Facebook Post":     "facebook",
+                "LinkedIn Post":     "linkedin",
+                "คอนเทนต์เว็บไซต์": "website",
+            }
+            ctype = ctype_map[ctype_label]
+            content_request = st.text_area("โจทย์ที่ต้องการ *",
+                placeholder="เช่น เขียนโพสต์อธิบายกระบวนการนำเข้ายาสำหรับ SME", height=120)
+            post_slack  = st.checkbox("ส่งไป Slack หลังเขียนเสร็จ", value=False)
+            gen_btn_c   = st.button("► เขียนคอนเทนต์", use_container_width=True)
+
+        with col2:
+            if gen_btn_c:
+                if not content_request.strip():
+                    st.warning("กรุณาใส่โจทย์ก่อน")
+                else:
+                    with st.spinner("✍️ กำลังเขียน..."):
+                        result = content_agent.generate_content(
+                            content_request, content_type=ctype, post_to_slack=post_slack)
+                    st.session_state.tok_total += content_agent.last_usage["total"]
+                    st.markdown(result)
+                    st.markdown(f'<div class="minor">🔢 Tokens: {content_agent.last_usage["total"]:,}</div>',
+                        unsafe_allow_html=True)
+
+                    if st.button("📨 ส่งให้ Reviewer ตรวจ", use_container_width=True):
+                        st.session_state.review_queue.append({
+                            "type":     ctype_label,
+                            "request":  content_request,
+                            "content":  result,
+                            "added_at": now_th.strftime("%H:%M"),
+                        })
+                        st.success("✅ ส่งไปแท็บ ✅ Review แล้ว!")
+            else:
+                st.markdown('<div class="minor">// ใส่โจทย์ทางซ้าย แล้วกด "เขียนคอนเทนต์"</div>',
+                    unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════════════════════════════
+#  TAB 6 — REVIEW
+# ════════════════════════════════════════════════════════════════
+with t6:
+    st.markdown('<div class="panel-title">✅ ตรวจสอบคุณภาพคอนเทนต์</div>', unsafe_allow_html=True)
+
+    if not REVIEW_OK:
+        st.error("❌ ไม่พบ supervisor_agent.py")
+    else:
+        queue = st.session_state.review_queue
+
+        if not queue:
+            st.markdown(
+                '<div class="minor">// ยังไม่มีคอนเทนต์รอตรวจ<br>'
+                'ไปแท็บ ✍️ Content แล้วกด "ส่งให้ Reviewer"</div>',
+                unsafe_allow_html=True)
         else:
-            ns["analyst"].markdown(agent_row_html(nm["analyst"], "working"), unsafe_allow_html=True)
-            try:
-                user_prompt = build_user_prompt(results_by_group)
-                analysis    = analyze_with_gemini(user_prompt)
-                n_tok       = marketing_researcher.last_usage["total"]
-            except Exception as e:
-                n_out.error(f"❌ Agent 05 error: {e}")
-                st.stop()
-            ns["analyst"].markdown(agent_row_html(nm["analyst"], "done"), unsafe_allow_html=True)
+            st.markdown(f'<div class="label">คิวรอตรวจ: {len(queue)} รายการ</div>',
+                unsafe_allow_html=True)
 
-            st.session_state.news_analysis = analysis
-            st.session_state.news_total    = total_news
-            st.session_state.tok_total    += n_tok
+            for i, item in enumerate(list(queue)):
+                with st.expander(
+                    f"[{item['type']}] {item['request'][:60]}... — {item['added_at']}",
+                    expanded=(i == 0)):
 
-            date_str  = datetime.now(TH).strftime("%Y-%m-%d")
-            report_md = f"""# รายงานวิจัยการตลาด — {date_str}
+                    st.markdown("**คอนเทนต์ต้นฉบับ:**")
+                    st.markdown(item["content"])
+                    st.divider()
 
-> **สร้างโดย:** Agent Pipeline (News Scout → Market Analyst)
-> **ข้อมูลจาก:** {total_news} บทความ | **บริษัท:** Jet8 Freight Forwarder
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        if st.button("🤖 ให้ AI ตรวจ (Supervisor)", key=f"ai_{i}",
+                                     use_container_width=True):
+                            with st.spinner("🔍 กำลังตรวจ..."):
+                                qc = supervisor_agent.review(item["content"], "content")
+                            st.session_state.tok_total += supervisor_agent.last_usage["total"]
+                            st.session_state[f"qc_{i}"] = qc
 
----
+                        if f"qc_{i}" in st.session_state:
+                            st.markdown("**ผล QC จาก Supervisor:**")
+                            st.markdown(st.session_state[f"qc_{i}"])
 
-{analysis}
+                    with col_b:
+                        human_comment = st.text_area(
+                            "💬 ความคิดเห็น / ข้อแก้ไขของคุณ", key=f"cmt_{i}", height=120,
+                            placeholder="ระบุสิ่งที่ต้องแก้ไข หรือพิมพ์ 'อนุมัติ' ถ้าโอเค")
 
----
-*สร้างอัตโนมัติโดย MARKETING OPS v0.3*
-"""
-            n_out.empty()
-            with n_out:
-                st.markdown('<div class="bigstat">✔ PIPELINE COMPLETE</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="minor">📰 ข่าวใหม่ {total_news} รายการ &nbsp;|&nbsp; 🔢 TOKENS {n_tok:,}</div>', unsafe_allow_html=True)
-                st.markdown(report_md)
-                st.download_button("⬇ DOWNLOAD REPORT (.md)", data=report_md,
-                                   file_name=f"news_report_{date_str}.md",
-                                   mime="text/markdown", use_container_width=True)
+                    btn1, btn2 = st.columns(2)
+                    with btn1:
+                        if st.button("✅ อนุมัติ — พร้อมโพสต์", key=f"ok_{i}",
+                                     use_container_width=True):
+                            st.success("✅ อนุมัติแล้ว! พร้อมส่งให้ทีมโพสต์")
+                            st.session_state.review_queue.pop(i)
+                            st.rerun()
+                    with btn2:
+                        if st.button("🔄 ส่งกลับแก้ไข", key=f"rej_{i}",
+                                     use_container_width=True):
+                            cmt = st.session_state.get(f"cmt_{i}", "").strip()
+                            if not cmt:
+                                st.warning("กรุณาใส่ความคิดเห็นก่อนส่งกลับ")
+                            else:
+                                st.session_state.review_queue[i]["feedback"] = cmt
+                                st.info(f"📨 บันทึกความคิดเห็นแล้ว: {cmt[:60]}...")
 
-    # ════════════════════════════════════════════════════════════════════════
-    #  CONTENT BRIDGE + QC
-    # ════════════════════════════════════════════════════════════════════════
-    if st.session_state.news_analysis:
-        st.markdown("""
-        <div style="margin-top:24px;">
-          <div class="bridge-title">▸ CONTENT BRIDGE — เปลี่ยนข่าวเป็น Content</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        with st.expander("📊 ดู Analysis จาก Agent 05"):
-            st.markdown(st.session_state.news_analysis)
-
-        col_p, col_t = st.columns(2)
-        with col_p:
-            platform = st.selectbox("🌐 Platform",
-                ["Facebook", "LinkedIn", "Instagram", "เว็บไซต์ (บทความ)", "Line Official"],
-                key="bridge_platform")
-        with col_t:
-            content_type = st.selectbox("📝 ประเภท Content",
-                ["โพสต์สั้น (Caption)", "บทความเต็ม (Long-form)",
-                 "Infographic Script", "Newsletter", "ประชาสัมพันธ์บริษัท"],
-                key="bridge_type")
-
-        analysis_preview = st.session_state.news_analysis[:400].rsplit("\n", 1)[0]
-        default_brief = (
-            f"บริษัท Jet8 — Freight Forwarder นำเข้า-ส่งออกอาหารและยาในไทย\n\n"
-            f"ประเด็นจากข่าวสัปดาห์นี้:\n{analysis_preview}...\n\n"
-            f"โจทย์: เขียน{content_type} สำหรับ {platform} "
-            f"กลุ่มเป้าหมาย: ผู้นำเข้า-ส่งออก, เจ้าของธุรกิจ Food & Pharma ภาษาไทย"
-        )
-
-        brief_text = st.text_area("✏️ ปรับ Brief ได้ตามต้องการ",
-                                   value=default_brief, height=200, key="bridge_brief")
-
-        gen_btn = st.button("► GENERATE CONTENT (Agent 06)",
-                            type="primary", use_container_width=True, key="gen_content")
-
-        writer_slot  = st.empty()
-        sup_slot     = st.empty()
-        content_area = st.container()
-
-        if gen_btn:
-            # Agent 06 — Content Writer
-            writer_slot.markdown(agent_row_html(nm["writer"], "working"), unsafe_allow_html=True)
-            full_brief = (
-                f"เขียน{content_type} สำหรับ {platform} ให้บริษัท Jet8\n\n"
-                f"=== Brief ===\n{brief_text}\n\n"
-                f"=== บริบทข่าวสัปดาห์นี้ (จาก Agent 05) ===\n{st.session_state.news_analysis}"
-            )
-            try:
-                content_post = generate_content(full_brief)
-                w_tok = agent.last_usage["total"]
-                st.session_state.tok_total += w_tok
-            except Exception as e:
-                content_area.error(f"❌ Agent 06 error: {e}")
-                st.stop()
-            writer_slot.markdown(agent_row_html(nm["writer"], "done"), unsafe_allow_html=True)
-
-            # Agent 00 — Supervisor QC
-            sup_slot.markdown(agent_row_html(SUPERVISOR, "working"), unsafe_allow_html=True)
-            qc_result = qc_review(content_post, content_type="content")
-            sup_tok = supervisor_agent.last_usage["total"]
-            st.session_state.tok_total += sup_tok
-            sup_slot.markdown(agent_row_html(SUPERVISOR, "done"), unsafe_allow_html=True)
-
-            date_str = datetime.now(TH).strftime("%Y-%m-%d %H:%M")
-            content_md = f"# {content_type} — {platform}\n_สร้างโดย Agent 06 เมื่อ {date_str}_\n\n---\n\n{content_post}\n\n---\n*ข้อมูลจาก {st.session_state.news_total} บทความข่าวสัปดาห์นี้*\n"
-
-            with content_area:
-                st.markdown('<div class="bigstat">✔ CONTENT READY</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="minor">🔢 Content {w_tok:,} + QC {sup_tok:,} &nbsp;|&nbsp; สะสม {st.session_state.tok_total:,}</div>', unsafe_allow_html=True)
-                st.markdown("---")
-                st.markdown(content_post)
-                st.download_button(
-                    f"⬇ DOWNLOAD {content_type} (.md)",
-                    data=content_md,
-                    file_name=f"content_{platform}_{datetime.now(TH).strftime('%Y%m%d_%H%M')}.md",
-                    mime="text/markdown", use_container_width=True,
-                )
-
-            # QC Panel
-            st.markdown(f"""
-            <div class="qc-panel">
-              <div class="qc-title">👑 QC REPORT — SUPERVISOR (Agent 00)</div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown(qc_result)
+# ── Footer: Token Counter ─────────────────────────────────────────────────────
+st.markdown(f"""
+<div style="border-top:1px solid #1e3a8a; margin-top:16px; padding-top:10px; text-align:right;">
+  <span class="minor">TOKENS (SESSION) &nbsp; {st.session_state.tok_total:,}</span>
+</div>
+""", unsafe_allow_html=True)
