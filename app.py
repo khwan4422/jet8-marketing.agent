@@ -335,7 +335,7 @@ with t3:
                 with st.spinner("🔄 กำลังดึงข้อมูล..."):
                     if search_kw.strip():
                         tasks = document_researcher.search_tasks(search_kw.strip())
-                        st.markdown(f"**ผลการค้นหา "{search_kw}"** ({len(tasks)} รายการ)")
+                        st.markdown(f'**ผลการค้นหา "{search_kw}"** ({len(tasks)} รายการ)')
                     else:
                         tasks = document_researcher.fetch_recent_tasks(days=days_back)
                         st.markdown(f"**Tasks อัปเดตใน {days_back} วันที่ผ่านมา** ({len(tasks)} รายการ)")
