@@ -196,10 +196,16 @@ def check_password():
 check_password()
 
 # ── Session State ─────────────────────────────────────────────────────────────
-if "review_queue" not in st.session_state:
-    st.session_state.review_queue = []   # content รอ review
-if "tok_total" not in st.session_state:
+if "review_queue"    not in st.session_state:
+    st.session_state.review_queue = []
+if "tok_total"       not in st.session_state:
     st.session_state.tok_total = 0
+if "generated_plan"  not in st.session_state:
+    st.session_state.generated_plan = None   # แผนที่เพิ่งสร้าง (รอยืนยัน)
+if "plan_month"      not in st.session_state:
+    st.session_state.plan_month = None
+if "plan_year"       not in st.session_state:
+    st.session_state.plan_year = None
 
 # ── Top Bar ───────────────────────────────────────────────────────────────────
 now_th = datetime.now(TH)
@@ -211,6 +217,44 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Helper ───────────────────────────────────────────────────────────────────
+
+import json as _json
+
+PLANS_DIR = "data/plans"
+os.makedirs(PLANS_DIR, exist_ok=True)
+
+def _plan_path(month: int, year: int) -> str:
+    return os.path.join(PLANS_DIR, f"plan_{year}_{month:02d}.json")
+
+def save_plan(month: int, year: int, content: str):
+    path = _plan_path(month, year)
+    existing = load_plan(month, year)
+    data = {
+        "month":      month,
+        "year":       year,
+        "content":    content,
+        "saved_at":   existing.get("saved_at", datetime.now(TH).isoformat()),
+        "updated_at": datetime.now(TH).isoformat(),
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        _json.dump(data, f, ensure_ascii=False, indent=2)
+
+def load_plan(month: int, year: int) -> dict:
+    path = _plan_path(month, year)
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return _json.load(f)
+
+def list_saved_plans() -> list:
+    """คืน list ของแผนที่บันทึกไว้ เรียงล่าสุดก่อน"""
+    plans = []
+    for fname in sorted(os.listdir(PLANS_DIR), reverse=True):
+        if fname.endswith(".json"):
+            with open(os.path.join(PLANS_DIR, fname), "r", encoding="utf-8") as f:
+                plans.append(_json.load(f))
+    return plans
+
 def _render_tasks(tasks: list):
     """แสดงผล task list สำหรับแท็บ Documents"""
     if not tasks:
@@ -249,6 +293,7 @@ with t1:
     if not PLANNER_OK:
         st.error("❌ ไม่พบไฟล์ planner.py")
     else:
+        # ── ส่วนบน: สร้างแผนใหม่ ──────────────────────────────────────────
         col1, col2 = st.columns([1, 2])
         with col1:
             sel_month = st.selectbox("เดือน", list(range(1, 13)),
@@ -263,9 +308,15 @@ with t1:
             if EVENT_OK:
                 month_events = event_tracker.get_events_in_month(sel_month, sel_year)
                 if month_events:
-                    st.info(f"🗓️ พบ {len(month_events)} อีเวนต์ในเดือนนี้ จะนำไปประกอบแผนด้วย")
+                    st.info(f"🗓️ พบ {len(month_events)} อีเวนต์ในเดือนนี้")
 
-            gen_btn = st.button("► สร้างแผน", use_container_width=True)
+            # แสดงสถานะแผนที่มีอยู่แล้ว
+            existing = load_plan(sel_month, sel_year)
+            if existing:
+                updated = existing.get("updated_at", "")[:10]
+                st.info(f"📌 มีแผนบันทึกไว้แล้ว (อัปเดต {updated})")
+
+            gen_btn = st.button("► สร้างแผนใหม่", use_container_width=True)
 
         with col2:
             if gen_btn:
@@ -274,16 +325,63 @@ with t1:
                         month=sel_month, year=sel_year,
                         focus=focus_text, events=month_events or None,
                     )
-                st.session_state.tok_total += planner_agent.last_usage["total"]
+                st.session_state.tok_total       += planner_agent.last_usage["total"]
+                st.session_state.generated_plan   = plan
+                st.session_state.plan_month       = sel_month
+                st.session_state.plan_year        = sel_year
+
+            # แสดงแผนที่เพิ่งสร้าง (ถ้าตรงเดือน/ปีที่เลือก)
+            if (st.session_state.generated_plan
+                    and st.session_state.plan_month == sel_month
+                    and st.session_state.plan_year  == sel_year):
+
+                plan = st.session_state.generated_plan
                 st.markdown(plan)
-                st.download_button("⬇ ดาวน์โหลดแผน (.md)", data=plan,
-                    file_name=f"plan_{sel_year}_{sel_month:02d}.md", mime="text/markdown",
-                    use_container_width=True)
                 st.markdown(f'<div class="minor">🔢 Tokens: {planner_agent.last_usage["total"]:,}</div>',
                     unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="minor">// เลือกเดือน แล้วกด "สร้างแผน"</div>',
+
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("✅ ใช้แผนนี้ — บันทึกเข้าระบบ", use_container_width=True):
+                        save_plan(sel_month, sel_year, plan)
+                        st.session_state.generated_plan = None
+                        st.success(f"✅ บันทึกแผน {planner_agent.THAI_MONTHS[sel_month]} {sel_year} แล้ว!")
+                        st.rerun()
+                with bc2:
+                    st.download_button("⬇ ดาวน์โหลด (.md)", data=plan,
+                        file_name=f"plan_{sel_year}_{sel_month:02d}.md",
+                        mime="text/markdown", use_container_width=True)
+            elif not gen_btn:
+                st.markdown('<div class="minor">// เลือกเดือน แล้วกด "สร้างแผนใหม่"</div>',
                     unsafe_allow_html=True)
+
+        # ── ส่วนล่าง: แผนที่บันทึกไว้ (โหลด + แก้ไข) ─────────────────────
+        st.divider()
+        saved_plans = list_saved_plans()
+        if saved_plans:
+            st.markdown('<div class="panel-title">📂 แผนที่บันทึกไว้</div>', unsafe_allow_html=True)
+            for p in saved_plans:
+                m, y = p["month"], p["year"]
+                label = f"{planner_agent.THAI_MONTHS[m]} {y}"
+                updated = p.get("updated_at", "")[:10]
+                with st.expander(f"📅 {label}  —  อัปเดต {updated}"):
+                    edited = st.text_area(
+                        "แก้ไขแผน",
+                        value=p["content"],
+                        height=400,
+                        key=f"edit_{y}_{m:02d}",
+                    )
+                    sc1, sc2 = st.columns(2)
+                    with sc1:
+                        if st.button("💾 บันทึกการแก้ไข", key=f"save_{y}_{m:02d}",
+                                     use_container_width=True):
+                            save_plan(m, y, edited)
+                            st.success("✅ บันทึกแล้ว!")
+                            st.rerun()
+                    with sc2:
+                        st.download_button("⬇ ดาวน์โหลด", data=edited,
+                            file_name=f"plan_{y}_{m:02d}.md", mime="text/markdown",
+                            key=f"dl_{y}_{m:02d}", use_container_width=True)
 
 
 # ════════════════════════════════════════════════════════════════
