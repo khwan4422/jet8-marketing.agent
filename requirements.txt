@@ -1,5 +1,5 @@
 streamlit
-google-genai
+anthropic
 python-dotenv
 feedparser
 requests
