@@ -71,114 +71,195 @@ try:
 except Exception:
     EVENT_OK = False
 
-# ── CSS — ธีม PAC-MAN 🟡 ──────────────────────────────────────────────────────
+# ── CSS — ธีมนีออน Retro + Pac-Man 🟡 ─────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Kanit:wght@400;600&display=swap');
 
-/* ── พื้นหลังสีดำ + จุดเม็ดยา Pac-Man ── */
 .stApp {
-  background-color: #000;
-  background-image: radial-gradient(circle, #ffffff22 1px, transparent 1px);
-  background-size: 28px 28px;
+  background:
+    linear-gradient(rgba(8,12,40,.97), rgba(8,12,40,.97)),
+    repeating-linear-gradient(0deg,  #0b1030 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(90deg, #0b1030 0 1px, transparent 1px 26px), #070a22;
   font-family: 'Kanit', sans-serif;
 }
 .block-container { padding-top: 1.5rem; }
 header[data-testid="stHeader"], [data-testid="stToolbar"],
 .stDeployButton, #MainMenu, footer { display: none !important; visibility: hidden; }
 
-/* ── Top bar — ขอบฟ้า Pac-Man ── */
+/* Top bar */
 .topbar {
   display: flex; justify-content: space-between; align-items: center;
-  border: 3px solid #FFD700; border-radius: 8px; padding: 10px 18px;
-  background: #000;
-  box-shadow: 0 0 20px rgba(255,215,0,.5), inset 0 0 20px rgba(255,215,0,.08);
+  border: 2px solid #22d3ee; border-radius: 8px; padding: 10px 18px;
+  background: #0a1140;
+  box-shadow: 0 0 14px rgba(34,211,238,.35), inset 0 0 18px rgba(34,211,238,.12);
   margin-bottom: 16px;
 }
-.topbar .ttl {
-  font-family: 'Press Start 2P'; color: #FFD700; font-size: .85rem;
-  text-shadow: 0 0 10px rgba(255,215,0,.9);
-}
-.topbar .clock {
-  font-family: 'Press Start 2P'; color: #FFD700; font-size: .75rem;
-  border: 2px solid #FFD700; border-radius: 6px; padding: 5px 10px;
-  text-shadow: 0 0 8px rgba(255,215,0,.8);
-}
+.topbar .ttl { font-family: 'Press Start 2P'; color: #22d3ee; font-size: .9rem;
+  text-shadow: 0 0 8px rgba(34,211,238,.8); }
+.topbar .clock { font-family: 'Press Start 2P'; color: #a3e635; font-size: .8rem;
+  border: 2px solid #a3e635; border-radius: 6px; padding: 5px 10px;
+  text-shadow: 0 0 8px rgba(163,230,53,.7); }
 
-/* ── Tabs — maze wall สีน้ำเงิน ── */
+/* Tabs */
 .stTabs [data-baseweb="tab-list"] {
-  background: #000080; border-radius: 8px; padding: 4px;
-  border: 3px solid #2121DE; gap: 4px;
-  box-shadow: 0 0 12px rgba(33,33,222,.6);
+  background: #0a1140; border-radius: 8px; padding: 4px;
+  border: 2px solid #1e3a8a; gap: 4px;
 }
 .stTabs [data-baseweb="tab"] {
-  font-family: 'Press Start 2P'; font-size: .55rem; color: #ffffffaa;
+  font-family: 'Press Start 2P'; font-size: .58rem; color: #7c8cc4;
   background: transparent; border: none; border-radius: 6px;
   padding: 10px 14px; letter-spacing: .5px;
 }
 .stTabs [aria-selected="true"] {
-  background: #FFD700 !important; color: #000 !important;
-  box-shadow: 0 0 14px rgba(255,215,0,.7);
+  background: #22d3ee !important; color: #07122e !important;
+  box-shadow: 0 0 12px rgba(34,211,238,.5);
 }
 .stTabs [data-baseweb="tab-panel"] { padding-top: 16px; }
 
-/* ── Panel cards — กล่องสีน้ำเงิน maze ── */
+/* Panel cards */
 .panel {
-  border: 3px solid #2121DE; border-radius: 8px; background: #00008b11;
-  box-shadow: 0 0 14px rgba(33,33,222,.4), inset 0 0 16px rgba(33,33,222,.07);
+  border: 2px solid #3b82f6; border-radius: 8px; background: #0a0f33;
+  box-shadow: 0 0 12px rgba(59,130,246,.25), inset 0 0 16px rgba(59,130,246,.06);
   padding: 16px; margin-bottom: 12px;
 }
 .panel-title {
-  font-family: 'Press Start 2P'; font-size: .63rem; color: #FFD700;
-  letter-spacing: 1px; margin-bottom: 12px;
-  text-shadow: 0 0 8px rgba(255,215,0,.8);
+  font-family: 'Press Start 2P'; font-size: .65rem; color: #67e8f9;
+  letter-spacing: 1px; margin-bottom: 12px; text-shadow: 0 0 6px rgba(103,232,249,.7);
 }
 
-/* ── Typography ── */
-h1, h2, h3, p, li, .stMarkdown { color: #fffde7 !important; }
-.stMarkdown h2 { color: #FFD700 !important; border-bottom: 2px solid #2121DE; padding-bottom: 4px; }
-.stMarkdown h3 { color: #FF69B4 !important; }  /* ghost pink */
-.label  { font-family: 'VT323'; font-size: 1.15rem; color: #FFD700; }
-.bigstat { font-family: 'Press Start 2P'; color: #FFD700; font-size: 1rem;
-  text-shadow: 0 0 8px rgba(255,215,0,.8); }
-.minor { font-family: 'VT323'; color: #00FFFF; font-size: 1.1rem; }  /* cyan ghost */
-.warn  { font-family: 'VT323'; color: #FF69B4; font-size: 1.05rem; }
+/* Typography */
+h1, h2, h3, p, li, .stMarkdown { color: #dbe4ff !important; }
+.stMarkdown h2 { color: #67e8f9 !important; border-bottom: 1px solid #1e3a8a; padding-bottom: 4px; }
+.stMarkdown h3 { color: #a3e635 !important; }
+.label { font-family: 'VT323'; font-size: 1.15rem; color: #67e8f9; }
+.bigstat { font-family: 'Press Start 2P'; color: #a3e635; font-size: 1rem;
+  text-shadow: 0 0 8px rgba(163,230,53,.7); }
+.minor { font-family: 'VT323'; color: #67e8f9; font-size: 1.1rem; }
+.warn { font-family: 'VT323'; color: #fbbf24; font-size: 1.05rem; }
 
-/* ── Buttons — Pac-Man เหลือง ── */
+/* Buttons */
 .stButton > button {
-  background: #000; color: #FFD700; border: 2px solid #FFD700;
-  border-radius: 8px; font-family: 'Press Start 2P'; font-size: .62rem;
+  background: #0a1140; color: #22d3ee; border: 2px solid #22d3ee;
+  border-radius: 8px; font-family: 'Press Start 2P'; font-size: .65rem;
   padding: 12px 0; letter-spacing: 1px;
-  box-shadow: 0 0 10px rgba(255,215,0,.35);
-  transition: all .2s;
+  box-shadow: 0 0 10px rgba(34,211,238,.3);
 }
-.stButton > button:hover { background: #FFD700; color: #000; box-shadow: 0 0 18px rgba(255,215,0,.7); }
+.stButton > button:hover { background: #22d3ee; color: #07122e; }
 
-/* ── Inputs ── */
+/* Inputs */
 .stTextInput > div > div > input,
 .stTextArea > div > div > textarea,
 .stSelectbox > div > div > div {
-  background: #00003a !important; color: #fffde7 !important;
-  border: 2px solid #2121DE !important; border-radius: 8px !important;
+  background: #0b1240 !important; color: #e0e7ff !important;
+  border: 2px solid #3b82f6 !important; border-radius: 8px !important;
   font-family: 'Kanit' !important;
 }
 .stTextInput label, .stTextArea label, .stSelectbox label,
-.stDateInput label, .stNumberInput label, .stRadio label { color: #FFD700 !important; font-weight: 600; }
+.stDateInput label, .stNumberInput label, .stRadio label { color: #67e8f9 !important; font-weight: 600; }
 
-/* ── Countdown badges ── */
+/* Event countdown badges */
 .badge-red    { background:#7f1d1d; color:#fca5a5; border-radius:6px; padding:2px 8px; font-size:.85rem; }
 .badge-orange { background:#7c2d12; color:#fdba74; border-radius:6px; padding:2px 8px; font-size:.85rem; }
-.badge-yellow { background:#3d3000; color:#FFD700; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+.badge-yellow { background:#713f12; color:#fde047; border-radius:6px; padding:2px 8px; font-size:.85rem; }
 .badge-green  { background:#14532d; color:#86efac; border-radius:6px; padding:2px 8px; font-size:.85rem; }
-.badge-blue   { background:#00003a; color:#93c5fd; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+.badge-blue   { background:#1e3a5f; color:#93c5fd; border-radius:6px; padding:2px 8px; font-size:.85rem; }
 .badge-gray   { background:#374151; color:#9ca3af; border-radius:6px; padding:2px 8px; font-size:.85rem; }
 
-/* ── Task rows ── */
+/* Task/doc rows */
 .task-row {
-  border: 2px solid #2121DE; border-radius: 8px; padding: 10px 14px;
-  margin-bottom: 8px; background: #00003a;
+  border: 1px solid #1e3a8a; border-radius: 8px; padding: 10px 14px;
+  margin-bottom: 8px; background: #0b1240;
 }
-.task-row:hover { border-color: #FFD700; box-shadow: 0 0 10px rgba(255,215,0,.3); }
+.task-row:hover { border-color: #22d3ee; }
+
+/* ══════════════════════════════════════════
+   🟡 PAC-MAN CHARACTER ANIMATIONS
+   ══════════════════════════════════════════ */
+@keyframes pm-chomp {
+  0%, 100% { transform: rotate(-32deg); }
+  50%       { transform: rotate(0deg);  }
+}
+@keyframes pm-pellet-blink {
+  0%, 100% { opacity: .8; transform: scale(1); }
+  50%       { opacity: .15; transform: scale(.4); }
+}
+@keyframes pm-walk {
+  0%   { left: 3%; }
+  50%  { left: calc(92% - 60px); }
+  100% { left: 3%; }
+}
+@keyframes pm-done-pop {
+  0%   { transform: scale(.8); opacity: 0; }
+  60%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* Pac-Man body (border-trick circle with transparent mouth) */
+.pm-body {
+  display: inline-block;
+  width: 0; height: 0;
+  border: 24px solid #4fc3f7;
+  border-right-color: transparent;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+}
+.pm-body.chomping { animation: pm-chomp .45s ease-in-out infinite; }
+.pm-eye {
+  position: absolute;
+  width: 5px; height: 5px;
+  background: #0a1140;
+  border-radius: 50%;
+  top: -18px; left: 3px;
+}
+
+/* ── IDLE BAR ── */
+.pm-idle-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 9px 16px; margin-bottom: 14px;
+  border: 2px solid #1e3a8a; border-radius: 8px; background: #0a0f33;
+}
+.pm-pellets { display: flex; gap: 8px; align-items: center; }
+.pm-pellet  {
+  width: 7px; height: 7px; background: #4fc3f7;
+  border-radius: 50%;
+}
+.pm-pellet:nth-child(1) { animation: pm-pellet-blink 1.1s 0s   infinite; }
+.pm-pellet:nth-child(2) { animation: pm-pellet-blink 1.1s .18s infinite; }
+.pm-pellet:nth-child(3) { animation: pm-pellet-blink 1.1s .36s infinite; }
+.pm-pellet:nth-child(4) { animation: pm-pellet-blink 1.1s .54s infinite; }
+.pm-pellet:nth-child(5) { animation: pm-pellet-blink 1.1s .72s infinite; }
+.pm-idle-txt { font-family:'VT323'; font-size:1.05rem; color:#67e8f9; }
+
+/* ── WORKING BAR (Pac-Man เดินถือกองกระดาษ) ── */
+.pm-work-bar {
+  position: relative; height: 72px; overflow: hidden;
+  border: 2px solid #3b82f6; border-radius: 8px; background: #0a0f33;
+  margin-bottom: 14px;
+  box-shadow: 0 0 10px rgba(59,130,246,.2);
+}
+.pm-walker {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  animation: pm-walk 2.4s ease-in-out infinite;
+}
+.pm-paper { font-size: 1.25rem; line-height: 1; }
+.pm-work-txt {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  font-family:'VT323'; font-size:1.05rem; color:#fbbf24; white-space:nowrap;
+}
+
+/* ── DONE BAR (ถือป้ายติ๊กถูก) ── */
+.pm-done-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 9px 16px; margin-bottom: 14px;
+  border: 2px solid #22c55e; border-radius: 8px; background: #052e16;
+  box-shadow: 0 0 10px rgba(34,197,94,.25);
+  animation: pm-done-pop .4s ease-out;
+}
+.pm-done-sign { font-size: 1.7rem; }
+.pm-done-txt  { font-family:'VT323'; font-size:1.1rem; color:#86efac; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -218,7 +299,7 @@ if "plan_year"       not in st.session_state:
 now_th = datetime.now(TH)
 st.markdown(f"""
 <div class="topbar">
-  <span class="ttl">🟡 MARKETING OPS v2.0 &nbsp;·&nbsp; JET8 &nbsp;👻👻👻</span>
+  <span class="ttl">▣ MARKETING OPS v2.0 — JET8</span>
   <span class="clock">{now_th.strftime('%d/%m/%Y %H:%M')}</span>
 </div>
 """, unsafe_allow_html=True)
@@ -261,6 +342,34 @@ def list_saved_plans() -> list:
             with open(os.path.join(PLANS_DIR, fname), "r", encoding="utf-8") as f:
                 plans.append(_json.load(f))
     return plans
+
+def pacman_html(state: str = "idle") -> str:
+    """คืน HTML สำหรับ Pac-Man น้อย 3 สถานะ: idle | working | done"""
+    if state == "idle":
+        return """<div class="pm-idle-bar">
+  <div class="pm-body chomping"><div class="pm-eye"></div></div>
+  <div class="pm-pellets">
+    <div class="pm-pellet"></div><div class="pm-pellet"></div>
+    <div class="pm-pellet"></div><div class="pm-pellet"></div>
+    <div class="pm-pellet"></div>
+  </div>
+  <span class="pm-idle-txt">รอรับคำสั่งอยู่นะคะ... 🎮</span>
+</div>"""
+    elif state == "working":
+        return """<div class="pm-work-bar">
+  <div class="pm-walker">
+    <div class="pm-paper">📄📄</div>
+    <div class="pm-body chomping"><div class="pm-eye"></div></div>
+  </div>
+  <span class="pm-work-txt">กำลังทำงานค่ะ ✨</span>
+</div>"""
+    else:  # done
+        return """<div class="pm-done-bar">
+  <div class="pm-body"><div class="pm-eye"></div></div>
+  <span class="pm-done-sign">📋✅</span>
+  <span class="pm-done-txt">เสร็จแล้วค่ะ! 🎉</span>
+</div>"""
+
 
 def _render_tasks(tasks: list):
     """แสดงผล task list สำหรับแท็บ Documents"""
@@ -326,12 +435,16 @@ with t1:
             gen_btn = st.button("► สร้างแผนใหม่", use_container_width=True)
 
         with col2:
+            pm_plan = st.empty()
+            pm_plan.markdown(pacman_html("idle"), unsafe_allow_html=True)
+
             if gen_btn:
-                with st.spinner("🤔 กำลังวางแผน..."):
-                    plan = planner_agent.generate_plan(
-                        month=sel_month, year=sel_year,
-                        focus=focus_text, events=month_events or None,
-                    )
+                pm_plan.markdown(pacman_html("working"), unsafe_allow_html=True)
+                plan = planner_agent.generate_plan(
+                    month=sel_month, year=sel_year,
+                    focus=focus_text, events=month_events or None,
+                )
+                pm_plan.markdown(pacman_html("done"), unsafe_allow_html=True)
                 st.session_state.tok_total       += planner_agent.last_usage["total"]
                 st.session_state.generated_plan   = plan
                 st.session_state.plan_month       = sel_month
@@ -404,9 +517,12 @@ with t2:
 
         with col1:
             st.markdown('<div class="label">STEP 1 — ดึงข่าวใหม่</div>', unsafe_allow_html=True)
+            pm_news = st.empty()
+            pm_news.markdown(pacman_html("idle"), unsafe_allow_html=True)
             if st.button("► ดึงข่าว (News Monitor)", use_container_width=True):
-                with st.spinner("📡 กำลังดึงข่าว..."):
-                    results, total = news_monitor.main()
+                pm_news.markdown(pacman_html("working"), unsafe_allow_html=True)
+                results, total = news_monitor.main()
+                pm_news.markdown(pacman_html("done"), unsafe_allow_html=True)
                 if total > 0:
                     st.success(f"✅ พบข่าวใหม่ {total} รายการ — ส่ง Slack แล้ว")
                     for group, arts in results.items():
@@ -419,9 +535,12 @@ with t2:
 
         with col2:
             st.markdown('<div class="label">STEP 2 — วิเคราะห์เชิงธุรกิจ</div>', unsafe_allow_html=True)
+            pm_research = st.empty()
+            pm_research.markdown(pacman_html("idle"), unsafe_allow_html=True)
             if st.button("► วิเคราะห์ข่าว (Research Analyst)", use_container_width=True):
-                with st.spinner("🧠 กำลังวิเคราะห์..."):
-                    filepath = marketing_researcher.main()
+                pm_research.markdown(pacman_html("working"), unsafe_allow_html=True)
+                filepath = marketing_researcher.main()
+                pm_research.markdown(pacman_html("done"), unsafe_allow_html=True)
                 if filepath:
                     with open(filepath, "r", encoding="utf-8") as f:
                         report_content = f.read()
@@ -465,26 +584,25 @@ with t3:
             fetch_btn = st.button("► ดึงข้อมูลจาก ClickUp", use_container_width=True)
 
         with col2:
+            pm_doc = st.empty()
+            pm_doc.markdown(pacman_html("idle"), unsafe_allow_html=True)
             if fetch_btn:
+                pm_doc.markdown(pacman_html("working"), unsafe_allow_html=True)
                 if search_kw.strip():
-                    # ค้นหาทุกช่องทาง
-                    with st.spinner("🔄 กำลังค้นหา..."):
-                        for key, ch in document_researcher.get_channels().items():
-                            results = document_researcher.search_in_channel(key, search_kw.strip())
-                            st.markdown(f'**{ch["label"]}** — ผลการค้นหา "{search_kw}"')
-                            _render_tasks(results)
+                    all_data_s = {key: document_researcher.search_in_channel(key, search_kw.strip())
+                                  for key in document_researcher.get_channels()}
+                    pm_doc.markdown(pacman_html("done"), unsafe_allow_html=True)
+                    for key, ch in document_researcher.get_channels().items():
+                        st.markdown(f'**{ch["label"]}** — ผลการค้นหา "{search_kw}"')
+                        _render_tasks(all_data_s[key])
                 else:
-                    # ดึงทั้ง 3 ช่อง
-                    with st.spinner("🔄 กำลังดึงข้อมูล..."):
-                        all_data = document_researcher.fetch_all_channels(days=days_back)
+                    all_data = document_researcher.fetch_all_channels(days=days_back)
+                    pm_doc.markdown(pacman_html("done"), unsafe_allow_html=True)
                     for key, ch in document_researcher.get_channels().items():
                         tasks = all_data.get(key, [])
                         real = [t for t in tasks if "error" not in t]
                         st.markdown(f'**{ch["label"]}** — {len(real)} รายการใน {days_back} วัน')
                         _render_tasks(tasks)
-            else:
-                st.markdown('<div class="minor">// กดปุ่มเพื่อดึงข้อมูลจาก ClickUp</div>',
-                    unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -494,6 +612,7 @@ with t4:
     st.markdown('<div class="panel-title">🗓️ ติดตามอีเวนต์ที่สนใจ</div>', unsafe_allow_html=True)
     st.markdown('<div class="warn">⚙️ Google Calendar integration: coming soon</div>',
         unsafe_allow_html=True)
+    st.markdown(pacman_html("idle"), unsafe_allow_html=True)
 
     if not EVENT_OK:
         st.error("❌ ไม่พบ event_tracker.py")
@@ -585,18 +704,20 @@ with t5:
             gen_btn_c   = st.button("► เขียนคอนเทนต์", use_container_width=True)
 
         with col2:
+            pm_content = st.empty()
+            pm_content.markdown(pacman_html("idle"), unsafe_allow_html=True)
             if gen_btn_c:
                 if not content_request.strip():
                     st.warning("กรุณาใส่โจทย์ก่อน")
                 else:
-                    with st.spinner("✍️ กำลังเขียน..."):
-                        result = content_agent.generate_content(
-                            content_request, content_type=ctype, post_to_slack=post_slack)
+                    pm_content.markdown(pacman_html("working"), unsafe_allow_html=True)
+                    result = content_agent.generate_content(
+                        content_request, content_type=ctype, post_to_slack=post_slack)
+                    pm_content.markdown(pacman_html("done"), unsafe_allow_html=True)
                     st.session_state.tok_total += content_agent.last_usage["total"]
                     st.markdown(result)
                     st.markdown(f'<div class="minor">🔢 Tokens: {content_agent.last_usage["total"]:,}</div>',
                         unsafe_allow_html=True)
-
                     if st.button("📨 ส่งให้ Reviewer ตรวจ", use_container_width=True):
                         st.session_state.review_queue.append({
                             "type":     ctype_label,
@@ -605,9 +726,6 @@ with t5:
                             "added_at": now_th.strftime("%H:%M"),
                         })
                         st.success("✅ ส่งไปแท็บ ✅ Review แล้ว!")
-            else:
-                st.markdown('<div class="minor">// ใส่โจทย์ทางซ้าย แล้วกด "เขียนคอนเทนต์"</div>',
-                    unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -641,10 +759,15 @@ with t6:
 
                     col_a, col_b = st.columns(2)
                     with col_a:
+                        pm_rev = st.empty()
+                        pm_rev.markdown(pacman_html(
+                            "done" if f"qc_{i}" in st.session_state else "idle"),
+                            unsafe_allow_html=True)
                         if st.button("🤖 ให้ AI ตรวจ (Supervisor)", key=f"ai_{i}",
                                      use_container_width=True):
-                            with st.spinner("🔍 กำลังตรวจ..."):
-                                qc = supervisor_agent.review(item["content"], "content")
+                            pm_rev.markdown(pacman_html("working"), unsafe_allow_html=True)
+                            qc = supervisor_agent.review(item["content"], "content")
+                            pm_rev.markdown(pacman_html("done"), unsafe_allow_html=True)
                             st.session_state.tok_total += supervisor_agent.last_usage["total"]
                             st.session_state[f"qc_{i}"] = qc
 
