@@ -209,6 +209,25 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# ── Helper ───────────────────────────────────────────────────────────────────
+def _render_tasks(tasks: list):
+    """แสดงผล task list สำหรับแท็บ Documents"""
+    if not tasks:
+        st.markdown('<div class="minor">  // ไม่มีรายการ</div>', unsafe_allow_html=True)
+        return
+    for task in tasks:
+        if "error" in task:
+            st.error(f"❌ {task['error']}")
+        else:
+            url_part = f'<a href="{task["url"]}" target="_blank">↗</a>' if task["url"] else ""
+            st.markdown(f"""
+<div class="task-row">
+  <b>{task['name']}</b> {url_part}<br>
+  <span style="color:#7c8cc4;font-size:.85rem">
+    🏷️ {task['status']} &nbsp;|&nbsp; 🕐 {task['updated_at']}
+  </span>
+</div>""", unsafe_allow_html=True)
+
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 t1, t2, t3, t4, t5, t6 = st.tabs([
     "📅 Planner",
@@ -319,39 +338,44 @@ with t3:
         st.error("❌ ไม่พบ document_researcher.py")
     elif not document_researcher.is_configured():
         st.warning("⚠️ ยังไม่ตั้งค่า ClickUp — เพิ่มใน .env:")
-        st.code("CLICKUP_API_TOKEN=pk_xxxxxxxxxxxx\nCLICKUP_TEAM_ID=xxxxxxxxx")
+        st.code("CLICKUP_TOKEN=pk_xxxxxxxxxxxx\nCUSTOMS_LIST_ID=xxxxxxxxx\nFDA_LIST_ID=xxxxxxxxx\nMOC_LIST_ID=xxxxxxxxx")
         st.markdown("วิธีหา API Token: ClickUp → Settings → Apps → API Token")
     else:
-        col1, col2 = st.columns([1, 2])
+        col1, col2 = st.columns([1, 2.5])
 
         with col1:
-            days_back = st.slider("ดูย้อนหลัง (วัน)", 7, 90, 30)
-            search_kw = st.text_input("ค้นหา keyword (optional)",
+            days_back  = st.slider("ดูย้อนหลัง (วัน)", 7, 90, 30)
+            search_kw  = st.text_input("ค้นหา keyword (optional)",
                 placeholder="เช่น อย., import, regulation")
+
+            # แสดงสถานะ List ID แต่ละช่อง
+            st.markdown('<div class="label" style="margin-top:12px">สถานะช่องทาง</div>',
+                unsafe_allow_html=True)
+            for key, ch in document_researcher.CHANNELS.items():
+                ok = bool(ch["list_id"])
+                dot = "🟢" if ok else "🔴"
+                st.markdown(f"{dot} {ch['label']}", unsafe_allow_html=False)
+
             fetch_btn = st.button("► ดึงข้อมูลจาก ClickUp", use_container_width=True)
 
         with col2:
             if fetch_btn:
-                with st.spinner("🔄 กำลังดึงข้อมูล..."):
-                    if search_kw.strip():
-                        tasks = document_researcher.search_tasks(search_kw.strip())
-                        st.markdown(f'**ผลการค้นหา "{search_kw}"** ({len(tasks)} รายการ)')
-                    else:
-                        tasks = document_researcher.fetch_recent_tasks(days=days_back)
-                        st.markdown(f"**Tasks อัปเดตใน {days_back} วันที่ผ่านมา** ({len(tasks)} รายการ)")
-
-                for task in tasks:
-                    if "error" in task:
-                        st.error(f"❌ {task['error']}")
-                    else:
-                        url_part = f"[↗]({task['url']})" if task['url'] else ""
-                        st.markdown(f"""
-<div class="task-row">
-  <b>{task['name']}</b> {url_part}<br>
-  <span style="color:#7c8cc4;font-size:.85rem">
-    📁 {task['list_name']} &nbsp;|&nbsp; 🏷️ {task['status']} &nbsp;|&nbsp; 🕐 {task['updated_at']}
-  </span>
-</div>""", unsafe_allow_html=True)
+                if search_kw.strip():
+                    # ค้นหาทุกช่องทาง
+                    with st.spinner("🔄 กำลังค้นหา..."):
+                        for key, ch in document_researcher.CHANNELS.items():
+                            results = document_researcher.search_in_channel(key, search_kw.strip())
+                            st.markdown(f'**{ch["label"]}** — ผลการค้นหา "{search_kw}"')
+                            _render_tasks(results)
+                else:
+                    # ดึงทั้ง 3 ช่อง
+                    with st.spinner("🔄 กำลังดึงข้อมูล..."):
+                        all_data = document_researcher.fetch_all_channels(days=days_back)
+                    for key, ch in document_researcher.CHANNELS.items():
+                        tasks = all_data.get(key, [])
+                        real = [t for t in tasks if "error" not in t]
+                        st.markdown(f'**{ch["label"]}** — {len(real)} รายการใน {days_back} วัน')
+                        _render_tasks(tasks)
             else:
                 st.markdown('<div class="minor">// กดปุ่มเพื่อดึงข้อมูลจาก ClickUp</div>',
                     unsafe_allow_html=True)
