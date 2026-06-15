@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 
 TH = timezone(timedelta(hours=7))
 
-st.set_page_config(page_title="MARKETING OPS v3.0", page_icon="👾", layout="wide")
+st.set_page_config(page_title="MARKETING OPS v0.3", page_icon="👾", layout="wide")
 
 # ── Secrets → Environment Variables (ต้องทำก่อน import agents) ──────────────
 try:
