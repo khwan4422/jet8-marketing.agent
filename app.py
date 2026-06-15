@@ -223,7 +223,7 @@ SUPERVISOR = {
 # ════════════════════════════════════════════════════════════════════════════
 st.markdown(f"""
 <div class="topbar">
-  <span class="ttl">▣ MARKETING OPS v3.0</span>
+  <span class="ttl">▣ MARKETING OPS v0.3</span>
   <span class="clock">TIME {datetime.now(TH).strftime('%H:%M')}</span>
 </div>
 """, unsafe_allow_html=True)
@@ -425,7 +425,7 @@ with tab2:
 {analysis}
 
 ---
-*สร้างอัตโนมัติโดย MARKETING OPS v3.0*
+*สร้างอัตโนมัติโดย MARKETING OPS v0.3*
 """
             n_out.empty()
             with n_out:
