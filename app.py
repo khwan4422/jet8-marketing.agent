@@ -184,10 +184,13 @@ h1, h2, h3, p, li, .stMarkdown { color: #dbe4ff !important; }
   0%, 100% { opacity: .8; transform: scale(1); }
   50%       { opacity: .15; transform: scale(.4); }
 }
-@keyframes pm-walk {
-  0%   { left: 3%; }
-  50%  { left: calc(92% - 60px); }
-  100% { left: 3%; }
+@keyframes ghost-bounce {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50%       { transform: translateY(-10px) rotate(4deg); }
+}
+@keyframes doc-wave {
+  0%, 100% { transform: rotate(-8deg) translateY(0); }
+  50%       { transform: rotate(8deg) translateY(-4px); }
 }
 @keyframes pm-done-pop {
   0%   { transform: scale(.8); opacity: 0; }
@@ -232,21 +235,45 @@ h1, h2, h3, p, li, .stMarkdown { color: #dbe4ff !important; }
 .pm-pellet:nth-child(5) { animation: pm-pellet-blink 1.1s .72s infinite; }
 .pm-idle-txt { font-family:'VT323'; font-size:1.05rem; color:#67e8f9; }
 
-/* ── WORKING BAR (Pac-Man เดินถือกองกระดาษ) ── */
+/* ── WORKING BAR (ผีกำลังชูเอกสารวิ่งอยู่กับที่) ── */
 .pm-work-bar {
-  position: relative; height: 72px; overflow: hidden;
+  display: flex; align-items: center; gap: 18px;
+  padding: 9px 16px; margin-bottom: 14px;
   border: 2px solid #3b82f6; border-radius: 8px; background: #0a0f33;
-  margin-bottom: 14px;
   box-shadow: 0 0 10px rgba(59,130,246,.2);
 }
-.pm-walker {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  animation: pm-walk 2.4s ease-in-out infinite;
+/* Ghost body */
+.ghost {
+  position: relative; width: 40px; height: 42px; flex-shrink: 0;
+  animation: ghost-bounce .55s ease-in-out infinite;
 }
-.pm-paper { font-size: 1.25rem; line-height: 1; }
+.ghost-head {
+  width: 40px; height: 34px;
+  background: #a78bfa;           /* ม่วง Inky สไตล์ */
+  border-radius: 20px 20px 0 0;
+  position: relative;
+}
+.ghost-skirt {
+  width: 40px; height: 12px;
+  background: #a78bfa;
+  clip-path: polygon(0% 0%, 12% 100%, 25% 0%, 37% 100%, 50% 0%, 63% 100%, 75% 0%, 88% 100%, 100% 0%);
+}
+.ghost-eye { position: absolute; width: 11px; height: 13px;
+  background: white; border-radius: 50%; top: 9px; }
+.ghost-eye.l { left: 7px; }
+.ghost-eye.r { right: 7px; }
+.ghost-eye::after {
+  content: ''; position: absolute; width: 5px; height: 6px;
+  background: #1e3a8a; border-radius: 50%; top: 3px; left: 3px;
+}
+/* Document held above ghost */
+.ghost-doc {
+  position: absolute; top: -22px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.2rem; line-height: 1;
+  animation: doc-wave .55s ease-in-out infinite;
+}
 .pm-work-txt {
-  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
   font-family:'VT323'; font-size:1.05rem; color:#fbbf24; white-space:nowrap;
 }
 
@@ -288,12 +315,25 @@ if "review_queue"    not in st.session_state:
     st.session_state.review_queue = []
 if "tok_total"       not in st.session_state:
     st.session_state.tok_total = 0
+if "tok_log"         not in st.session_state:
+    st.session_state.tok_log = []          # [(label, n)] สำหรับแสดง breakdown
 if "generated_plan"  not in st.session_state:
-    st.session_state.generated_plan = None   # แผนที่เพิ่งสร้าง (รอยืนยัน)
+    st.session_state.generated_plan = None
 if "plan_month"      not in st.session_state:
     st.session_state.plan_month = None
 if "plan_year"       not in st.session_state:
     st.session_state.plan_year = None
+if "content_req"     not in st.session_state:
+    st.session_state.content_req = ""      # pre-fill text area จาก Planner
+if "clickup_ctx_ch"  not in st.session_state:
+    st.session_state.clickup_ctx_ch = ""   # ClickUp channel ที่เลือกเป็น context
+
+
+def _add_tokens(label: str, n: int):
+    """เพิ่ม token เข้า session แบบ tracked"""
+    if n > 0:
+        st.session_state.tok_total += n
+        st.session_state.tok_log.append((label, n))
 
 # ── Top Bar ───────────────────────────────────────────────────────────────────
 now_th = datetime.now(TH)
@@ -357,9 +397,13 @@ def pacman_html(state: str = "idle") -> str:
 </div>"""
     elif state == "working":
         return """<div class="pm-work-bar">
-  <div class="pm-walker">
-    <div class="pm-paper">📄📄</div>
-    <div class="pm-body chomping"><div class="pm-eye"></div></div>
+  <div class="ghost">
+    <div class="ghost-doc">📄📄</div>
+    <div class="ghost-head">
+      <div class="ghost-eye l"></div>
+      <div class="ghost-eye r"></div>
+    </div>
+    <div class="ghost-skirt"></div>
   </div>
   <span class="pm-work-txt">กำลังทำงานค่ะ ✨</span>
 </div>"""
@@ -445,7 +489,7 @@ with t1:
                     focus=focus_text, events=month_events or None,
                 )
                 pm_plan.markdown(pacman_html("done"), unsafe_allow_html=True)
-                st.session_state.tok_total       += planner_agent.last_usage["total"]
+                _add_tokens("Planner", planner_agent.last_usage["total"])
                 st.session_state.generated_plan   = plan
                 st.session_state.plan_month       = sel_month
                 st.session_state.plan_year        = sel_year
@@ -541,6 +585,7 @@ with t2:
                 pm_research.markdown(pacman_html("working"), unsafe_allow_html=True)
                 filepath = marketing_researcher.main()
                 pm_research.markdown(pacman_html("done"), unsafe_allow_html=True)
+                _add_tokens("Research", marketing_researcher.last_usage.get("total", 0))
                 if filepath:
                     with open(filepath, "r", encoding="utf-8") as f:
                         report_content = f.read()
@@ -687,6 +732,51 @@ with t5:
     if not CONTENT_OK:
         st.error("❌ ไม่พบ agent.py")
     else:
+        # ── แหล่งอ้างอิง: Planner + ClickUp ─────────────────────────────────
+        with st.expander("📅 เลือกหัวข้อจากแผน + อ้างอิงข้อมูล ClickUp", expanded=False):
+            ref_c1, ref_c2 = st.columns(2)
+
+            with ref_c1:
+                st.markdown('<div class="label" style="margin-bottom:6px">หัวข้อจากแผนเดือนนี้</div>',
+                    unsafe_allow_html=True)
+                cur_plan = load_plan(now_th.month, now_th.year)
+                plan_topics = ["— เลือกเองได้เลย —"]
+                if cur_plan.get("content"):
+                    for line in cur_plan["content"].split("\n"):
+                        stripped = line.strip()
+                        if stripped.startswith("- ") and len(stripped) > 4:
+                            plan_topics.append(stripped[2:].strip())
+
+                if len(plan_topics) > 1:
+                    sel_topic = st.selectbox("หัวข้อจากแผน", plan_topics, key="sel_topic_plan")
+                    if sel_topic != plan_topics[0]:
+                        if st.button("✏️ ใส่หัวข้อนี้ในช่องโจทย์", use_container_width=True):
+                            st.session_state.content_req = sel_topic
+                            st.rerun()
+                else:
+                    st.info("ยังไม่มีแผนเดือนนี้ — สร้างในแท็บ 📅 Planner ก่อนนะคะ")
+
+            with ref_c2:
+                st.markdown('<div class="label" style="margin-bottom:6px">อ้างอิงข้อมูล ClickUp</div>',
+                    unsafe_allow_html=True)
+                if DOC_OK and document_researcher.is_configured():
+                    ch_map = {k: v["label"] for k, v in document_researcher.get_channels().items()}
+                    ch_keys = ["— ไม่ใช้ —"] + list(ch_map.keys())
+                    sel_ch_display = st.selectbox(
+                        "ช่องทาง ClickUp",
+                        ch_keys,
+                        format_func=lambda k: ch_map.get(k, k),
+                        key="clickup_ctx_sel",
+                    )
+                    if sel_ch_display != ch_keys[0]:
+                        st.session_state.clickup_ctx_ch = sel_ch_display
+                        st.caption(f"จะดึงงานล่าสุด 7 รายการจาก {ch_map[sel_ch_display]} ใส่เป็น context ให้ AI")
+                    else:
+                        st.session_state.clickup_ctx_ch = ""
+                else:
+                    st.warning("ClickUp ยังไม่ตั้งค่า — ไปตั้งค่าในแท็บ 📄 Documents")
+
+        # ── ฟอร์มหลัก ───────────────────────────────────────────────────────
         col1, col2 = st.columns([1, 1.3])
 
         with col1:
@@ -698,8 +788,12 @@ with t5:
                 "คอนเทนต์เว็บไซต์": "website",
             }
             ctype = ctype_map[ctype_label]
-            content_request = st.text_area("โจทย์ที่ต้องการ *",
-                placeholder="เช่น เขียนโพสต์อธิบายกระบวนการนำเข้ายาสำหรับ SME", height=120)
+            content_request = st.text_area(
+                "โจทย์ที่ต้องการ *",
+                placeholder="เช่น เขียนโพสต์อธิบายกระบวนการนำเข้ายาสำหรับ SME",
+                height=120,
+                key="content_req",          # ← sync กับ session state (pre-fill จาก Planner)
+            )
             post_slack  = st.checkbox("ส่งไป Slack หลังเขียนเสร็จ", value=False)
             gen_btn_c   = st.button("► เขียนคอนเทนต์", use_container_width=True)
 
@@ -710,13 +804,26 @@ with t5:
                 if not content_request.strip():
                     st.warning("กรุณาใส่โจทย์ก่อน")
                 else:
+                    # เพิ่ม ClickUp context ถ้าเลือกไว้
+                    full_req = content_request.strip()
+                    ctx_ch = st.session_state.get("clickup_ctx_ch", "")
+                    if ctx_ch and DOC_OK and document_researcher.is_configured():
+                        ctx_tasks = document_researcher.fetch_by_channel(ctx_ch, days=30, max_results=7)
+                        ctx_lines = [f"- {t['name']} (สถานะ: {t['status']})"
+                                     for t in ctx_tasks if "error" not in t]
+                        if ctx_lines:
+                            ch_lbl = document_researcher.get_channels()[ctx_ch]["label"]
+                            full_req += (f"\n\n[ข้อมูลอ้างอิงจาก ClickUp — {ch_lbl}]\n"
+                                         + "\n".join(ctx_lines)
+                                         + "\n\nใช้ข้อมูลด้านบนประกอบการเขียนคอนเทนต์ให้น่าเชื่อถือ")
+
                     pm_content.markdown(pacman_html("working"), unsafe_allow_html=True)
                     result = content_agent.generate_content(
-                        content_request, content_type=ctype, post_to_slack=post_slack)
+                        full_req, content_type=ctype, post_to_slack=post_slack)
                     pm_content.markdown(pacman_html("done"), unsafe_allow_html=True)
-                    st.session_state.tok_total += content_agent.last_usage["total"]
+                    _add_tokens("Content", content_agent.last_usage["total"])
                     st.markdown(result)
-                    st.markdown(f'<div class="minor">🔢 Tokens: {content_agent.last_usage["total"]:,}</div>',
+                    st.markdown(f'<div class="minor">🔢 {content_agent.last_usage["total"]:,} tokens</div>',
                         unsafe_allow_html=True)
                     if st.button("📨 ส่งให้ Reviewer ตรวจ", use_container_width=True):
                         st.session_state.review_queue.append({
@@ -768,7 +875,7 @@ with t6:
                             pm_rev.markdown(pacman_html("working"), unsafe_allow_html=True)
                             qc = supervisor_agent.review(item["content"], "content")
                             pm_rev.markdown(pacman_html("done"), unsafe_allow_html=True)
-                            st.session_state.tok_total += supervisor_agent.last_usage["total"]
+                            _add_tokens("Review", supervisor_agent.last_usage["total"])
                             st.session_state[f"qc_{i}"] = qc
 
                         if f"qc_{i}" in st.session_state:
@@ -798,8 +905,15 @@ with t6:
                                 st.info(f"📨 บันทึกความคิดเห็นแล้ว: {cmt[:60]}...")
 
 # ── Footer: Token Counter ─────────────────────────────────────────────────────
+log_parts = " &nbsp;|&nbsp; ".join(
+    f"{lbl}: {n:,}" for lbl, n in st.session_state.tok_log[-6:]
+) if st.session_state.tok_log else "ยังไม่มีการใช้งาน"
 st.markdown(f"""
-<div style="border-top:1px solid #1e3a8a; margin-top:16px; padding-top:10px; text-align:right;">
-  <span class="minor">TOKENS (SESSION) &nbsp; {st.session_state.tok_total:,}</span>
+<div style="border-top:1px solid #1e3a8a; margin-top:16px; padding-top:10px;
+            display:flex; justify-content:space-between; align-items:center;">
+  <span style="font-family:'VT323';font-size:.95rem;color:#475569;">{log_parts}</span>
+  <span class="bigstat" style="font-size:.85rem;">
+    🔢 {st.session_state.tok_total:,} tokens
+  </span>
 </div>
 """, unsafe_allow_html=True)
