@@ -89,8 +89,9 @@ def generate_plan(month: int, year: int, focus: str = "", events: list = None) -
 
     response = client.messages.create(
         model=MODEL,
-        max_tokens=2500,
-        system=SYSTEM_PROMPT,
+        max_tokens=1500,
+        system=[{"type": "text", "text": SYSTEM_PROMPT,
+                 "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": prompt}],
     )
     last_usage["input"]  = response.usage.input_tokens

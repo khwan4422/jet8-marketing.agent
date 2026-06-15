@@ -129,8 +129,9 @@ def analyze(user_prompt: str) -> str:
     try:
         response = client.messages.create(     # ✅ Claude API
             model=MODEL,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
+            max_tokens=2000,
+            system=[{"type": "text", "text": SYSTEM_PROMPT,
+                     "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_prompt}],
         )
         last_usage["input"]  = response.usage.input_tokens
