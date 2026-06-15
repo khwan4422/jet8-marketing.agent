@@ -15,7 +15,7 @@ load_dotenv()
 TH = timezone(timedelta(hours=7))
 
 # ── ตั้งค่าหน้า ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="👾", layout="wide")
+st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="🟡", layout="wide")
 
 # ── โหลด Secrets (สำหรับ deploy บน Streamlit Cloud) ─────────────────────────
 for key in ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "SLACK_BOT_TOKEN",
@@ -71,107 +71,114 @@ try:
 except Exception:
     EVENT_OK = False
 
-# ── CSS — ธีมนีออน Retro ─────────────────────────────────────────────────────
+# ── CSS — ธีม PAC-MAN 🟡 ──────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Kanit:wght@400;600&display=swap');
 
+/* ── พื้นหลังสีดำ + จุดเม็ดยา Pac-Man ── */
 .stApp {
-  background:
-    linear-gradient(rgba(8,12,40,.97), rgba(8,12,40,.97)),
-    repeating-linear-gradient(0deg,  #0b1030 0 1px, transparent 1px 26px),
-    repeating-linear-gradient(90deg, #0b1030 0 1px, transparent 1px 26px), #070a22;
+  background-color: #000;
+  background-image: radial-gradient(circle, #ffffff22 1px, transparent 1px);
+  background-size: 28px 28px;
   font-family: 'Kanit', sans-serif;
 }
 .block-container { padding-top: 1.5rem; }
 header[data-testid="stHeader"], [data-testid="stToolbar"],
 .stDeployButton, #MainMenu, footer { display: none !important; visibility: hidden; }
 
-/* Top bar */
+/* ── Top bar — ขอบฟ้า Pac-Man ── */
 .topbar {
   display: flex; justify-content: space-between; align-items: center;
-  border: 2px solid #22d3ee; border-radius: 8px; padding: 10px 18px;
-  background: #0a1140;
-  box-shadow: 0 0 14px rgba(34,211,238,.35), inset 0 0 18px rgba(34,211,238,.12);
+  border: 3px solid #FFD700; border-radius: 8px; padding: 10px 18px;
+  background: #000;
+  box-shadow: 0 0 20px rgba(255,215,0,.5), inset 0 0 20px rgba(255,215,0,.08);
   margin-bottom: 16px;
 }
-.topbar .ttl { font-family: 'Press Start 2P'; color: #22d3ee; font-size: .9rem;
-  text-shadow: 0 0 8px rgba(34,211,238,.8); }
-.topbar .clock { font-family: 'Press Start 2P'; color: #a3e635; font-size: .8rem;
-  border: 2px solid #a3e635; border-radius: 6px; padding: 5px 10px;
-  text-shadow: 0 0 8px rgba(163,230,53,.7); }
+.topbar .ttl {
+  font-family: 'Press Start 2P'; color: #FFD700; font-size: .85rem;
+  text-shadow: 0 0 10px rgba(255,215,0,.9);
+}
+.topbar .clock {
+  font-family: 'Press Start 2P'; color: #FFD700; font-size: .75rem;
+  border: 2px solid #FFD700; border-radius: 6px; padding: 5px 10px;
+  text-shadow: 0 0 8px rgba(255,215,0,.8);
+}
 
-/* Tabs */
+/* ── Tabs — maze wall สีน้ำเงิน ── */
 .stTabs [data-baseweb="tab-list"] {
-  background: #0a1140; border-radius: 8px; padding: 4px;
-  border: 2px solid #1e3a8a; gap: 4px;
+  background: #000080; border-radius: 8px; padding: 4px;
+  border: 3px solid #2121DE; gap: 4px;
+  box-shadow: 0 0 12px rgba(33,33,222,.6);
 }
 .stTabs [data-baseweb="tab"] {
-  font-family: 'Press Start 2P'; font-size: .58rem; color: #7c8cc4;
+  font-family: 'Press Start 2P'; font-size: .55rem; color: #ffffffaa;
   background: transparent; border: none; border-radius: 6px;
   padding: 10px 14px; letter-spacing: .5px;
 }
 .stTabs [aria-selected="true"] {
-  background: #22d3ee !important; color: #07122e !important;
-  box-shadow: 0 0 12px rgba(34,211,238,.5);
+  background: #FFD700 !important; color: #000 !important;
+  box-shadow: 0 0 14px rgba(255,215,0,.7);
 }
 .stTabs [data-baseweb="tab-panel"] { padding-top: 16px; }
 
-/* Panel cards */
+/* ── Panel cards — กล่องสีน้ำเงิน maze ── */
 .panel {
-  border: 2px solid #3b82f6; border-radius: 8px; background: #0a0f33;
-  box-shadow: 0 0 12px rgba(59,130,246,.25), inset 0 0 16px rgba(59,130,246,.06);
+  border: 3px solid #2121DE; border-radius: 8px; background: #00008b11;
+  box-shadow: 0 0 14px rgba(33,33,222,.4), inset 0 0 16px rgba(33,33,222,.07);
   padding: 16px; margin-bottom: 12px;
 }
 .panel-title {
-  font-family: 'Press Start 2P'; font-size: .65rem; color: #67e8f9;
-  letter-spacing: 1px; margin-bottom: 12px; text-shadow: 0 0 6px rgba(103,232,249,.7);
+  font-family: 'Press Start 2P'; font-size: .63rem; color: #FFD700;
+  letter-spacing: 1px; margin-bottom: 12px;
+  text-shadow: 0 0 8px rgba(255,215,0,.8);
 }
 
-/* Typography */
-h1, h2, h3, p, li, .stMarkdown { color: #dbe4ff !important; }
-.stMarkdown h2 { color: #67e8f9 !important; border-bottom: 1px solid #1e3a8a; padding-bottom: 4px; }
-.stMarkdown h3 { color: #a3e635 !important; }
-.label { font-family: 'VT323'; font-size: 1.15rem; color: #67e8f9; }
-.bigstat { font-family: 'Press Start 2P'; color: #a3e635; font-size: 1rem;
-  text-shadow: 0 0 8px rgba(163,230,53,.7); }
-.minor { font-family: 'VT323'; color: #67e8f9; font-size: 1.1rem; }
-.warn { font-family: 'VT323'; color: #fbbf24; font-size: 1.05rem; }
+/* ── Typography ── */
+h1, h2, h3, p, li, .stMarkdown { color: #fffde7 !important; }
+.stMarkdown h2 { color: #FFD700 !important; border-bottom: 2px solid #2121DE; padding-bottom: 4px; }
+.stMarkdown h3 { color: #FF69B4 !important; }  /* ghost pink */
+.label  { font-family: 'VT323'; font-size: 1.15rem; color: #FFD700; }
+.bigstat { font-family: 'Press Start 2P'; color: #FFD700; font-size: 1rem;
+  text-shadow: 0 0 8px rgba(255,215,0,.8); }
+.minor { font-family: 'VT323'; color: #00FFFF; font-size: 1.1rem; }  /* cyan ghost */
+.warn  { font-family: 'VT323'; color: #FF69B4; font-size: 1.05rem; }
 
-/* Buttons */
+/* ── Buttons — Pac-Man เหลือง ── */
 .stButton > button {
-  background: #0a1140; color: #22d3ee; border: 2px solid #22d3ee;
-  border-radius: 8px; font-family: 'Press Start 2P'; font-size: .65rem;
+  background: #000; color: #FFD700; border: 2px solid #FFD700;
+  border-radius: 8px; font-family: 'Press Start 2P'; font-size: .62rem;
   padding: 12px 0; letter-spacing: 1px;
-  box-shadow: 0 0 10px rgba(34,211,238,.3);
+  box-shadow: 0 0 10px rgba(255,215,0,.35);
+  transition: all .2s;
 }
-.stButton > button:hover { background: #22d3ee; color: #07122e; }
+.stButton > button:hover { background: #FFD700; color: #000; box-shadow: 0 0 18px rgba(255,215,0,.7); }
 
-/* Inputs */
+/* ── Inputs ── */
 .stTextInput > div > div > input,
 .stTextArea > div > div > textarea,
 .stSelectbox > div > div > div {
-  background: #0b1240 !important; color: #e0e7ff !important;
-  border: 2px solid #3b82f6 !important; border-radius: 8px !important;
+  background: #00003a !important; color: #fffde7 !important;
+  border: 2px solid #2121DE !important; border-radius: 8px !important;
   font-family: 'Kanit' !important;
 }
 .stTextInput label, .stTextArea label, .stSelectbox label,
-.stDateInput label, .stNumberInput label, .stRadio label { color: #67e8f9 !important; font-weight: 600; }
+.stDateInput label, .stNumberInput label, .stRadio label { color: #FFD700 !important; font-weight: 600; }
 
-/* Event countdown badges */
+/* ── Countdown badges ── */
 .badge-red    { background:#7f1d1d; color:#fca5a5; border-radius:6px; padding:2px 8px; font-size:.85rem; }
 .badge-orange { background:#7c2d12; color:#fdba74; border-radius:6px; padding:2px 8px; font-size:.85rem; }
-.badge-yellow { background:#713f12; color:#fde047; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+.badge-yellow { background:#3d3000; color:#FFD700; border-radius:6px; padding:2px 8px; font-size:.85rem; }
 .badge-green  { background:#14532d; color:#86efac; border-radius:6px; padding:2px 8px; font-size:.85rem; }
-.badge-blue   { background:#1e3a5f; color:#93c5fd; border-radius:6px; padding:2px 8px; font-size:.85rem; }
+.badge-blue   { background:#00003a; color:#93c5fd; border-radius:6px; padding:2px 8px; font-size:.85rem; }
 .badge-gray   { background:#374151; color:#9ca3af; border-radius:6px; padding:2px 8px; font-size:.85rem; }
 
-/* Task/doc rows */
+/* ── Task rows ── */
 .task-row {
-  border: 1px solid #1e3a8a; border-radius: 8px; padding: 10px 14px;
-  margin-bottom: 8px; background: #0b1240;
+  border: 2px solid #2121DE; border-radius: 8px; padding: 10px 14px;
+  margin-bottom: 8px; background: #00003a;
 }
-.task-row:hover { border-color: #22d3ee; }
+.task-row:hover { border-color: #FFD700; box-shadow: 0 0 10px rgba(255,215,0,.3); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -211,7 +218,7 @@ if "plan_year"       not in st.session_state:
 now_th = datetime.now(TH)
 st.markdown(f"""
 <div class="topbar">
-  <span class="ttl">▣ MARKETING OPS v2.0 — JET8</span>
+  <span class="ttl">🟡 MARKETING OPS v2.0 &nbsp;·&nbsp; JET8 &nbsp;👻👻👻</span>
   <span class="clock">{now_th.strftime('%d/%m/%Y %H:%M')}</span>
 </div>
 """, unsafe_allow_html=True)
