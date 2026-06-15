@@ -14,7 +14,7 @@ if not API_KEY:
     raise ValueError("❌ Missing ANTHROPIC_API_KEY in .env")
 
 client = anthropic.Anthropic(api_key=API_KEY)
-MODEL  = "claude-opus-4-8"   # ใช้ Opus เพราะเป็น QC หัวหน้าทีม
+MODEL  = "claude-sonnet-4-6"   # ลดจาก Opus → Sonnet ประหยัด ~80%
 
 SYSTEM_PROMPT = """คุณเป็น Marketing Director อาวุโสของบริษัท Jet8 (Freight Forwarder นำเข้า-ส่งออกอาหารและยาในไทย)
 หน้าที่ของคุณคือตรวจสอบคุณภาพ output ที่ทีม AI เขียนขึ้นก่อนนำไปใช้จริง
@@ -70,8 +70,9 @@ def review(content: str, content_type: str = "content") -> str:
     try:
         response = client.messages.create(
             model=MODEL,
-            max_tokens=1500,
-            system=SYSTEM_PROMPT,
+            max_tokens=700,
+            system=[{"type": "text", "text": SYSTEM_PROMPT,
+                     "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": prompt}],
         )
         last_usage["input"]  = response.usage.input_tokens
