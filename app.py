@@ -19,8 +19,9 @@ st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="👾", layout="wi
 
 # ── โหลด Secrets (สำหรับ deploy บน Streamlit Cloud) ─────────────────────────
 for key in ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "SLACK_BOT_TOKEN",
-            "SLACK_CHANNEL_ID", "SLACK_NEWS_CHANNEL_ID", "CLICKUP_API_TOKEN",
-            "CLICKUP_TEAM_ID", "APP_PASSWORD"]:
+            "SLACK_CHANNEL_ID", "SLACK_NEWS_CHANNEL_ID",
+            "CLICKUP_TOKEN", "CUSTOMS_LIST_ID", "FDA_LIST_ID", "MOC_LIST_ID",
+            "APP_PASSWORD"]:
     try:
         if key in st.secrets:
             os.environ[key] = st.secrets[key]
@@ -351,7 +352,7 @@ with t3:
             # แสดงสถานะ List ID แต่ละช่อง
             st.markdown('<div class="label" style="margin-top:12px">สถานะช่องทาง</div>',
                 unsafe_allow_html=True)
-            for key, ch in document_researcher.CHANNELS.items():
+            for key, ch in document_researcher.get_channels().items():
                 ok = bool(ch["list_id"])
                 dot = "🟢" if ok else "🔴"
                 st.markdown(f"{dot} {ch['label']}", unsafe_allow_html=False)
@@ -363,7 +364,7 @@ with t3:
                 if search_kw.strip():
                     # ค้นหาทุกช่องทาง
                     with st.spinner("🔄 กำลังค้นหา..."):
-                        for key, ch in document_researcher.CHANNELS.items():
+                        for key, ch in document_researcher.get_channels().items():
                             results = document_researcher.search_in_channel(key, search_kw.strip())
                             st.markdown(f'**{ch["label"]}** — ผลการค้นหา "{search_kw}"')
                             _render_tasks(results)
@@ -371,7 +372,7 @@ with t3:
                     # ดึงทั้ง 3 ช่อง
                     with st.spinner("🔄 กำลังดึงข้อมูล..."):
                         all_data = document_researcher.fetch_all_channels(days=days_back)
-                    for key, ch in document_researcher.CHANNELS.items():
+                    for key, ch in document_researcher.get_channels().items():
                         tasks = all_data.get(key, [])
                         real = [t for t in tasks if "error" not in t]
                         st.markdown(f'**{ch["label"]}** — {len(real)} รายการใน {days_back} วัน')
