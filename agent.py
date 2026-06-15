@@ -1,76 +1,93 @@
 # ============================================================
-#  Content Agent ตัวแรกของคุณ 🤖✍️
-#  ผู้ช่วย AI เขียนคอนเทนต์การตลาด — ใช้ Google Gemini (ฟรี)
-#  อ่านคู่มือติดตั้งในไฟล์ README.md ก่อนรันนะครับ
+#  Content Agent — Agent 02 ✍️
+#  เขียนคอนเทนต์การตลาด ด้วย Claude API
 # ============================================================
 
-import os                          # ใช้ดึงค่าจากไฟล์ตั้งค่า (.env)
-from google import genai           # ไลบรารีของ Google สำหรับคุยกับ Gemini
-from dotenv import load_dotenv     # ตัวช่วยอ่านไฟล์ .env
+import os
+import anthropic
+from dotenv import load_dotenv
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
 
-# --- ขั้นที่ 1: โหลด API Key จากไฟล์ .env ---
-load_dotenv()                              # อ่านไฟล์ .env เข้ามา
-API_KEY = os.getenv("GEMINI_API_KEY")      # ดึงค่ากุญแจออกมา
+# ── โหลด Environment Variables ──────────────────────────────────────────────
+load_dotenv()
+
+API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 if not API_KEY:
-    print("❌ ไม่เจอ GEMINI_API_KEY")
-    print("   เปิดไฟล์ .env แล้วใส่กุญแจของคุณก่อนนะครับ (ดูวิธีใน README.md)")
-    raise SystemExit            # หยุดโปรแกรมอย่างสุภาพ
+    raise ValueError(
+        "❌ Missing ANTHROPIC_API_KEY in .env\n"
+        "   ขอ Key ได้ที่: https://console.anthropic.com/"
+    )
 
-# --- ขั้นที่ 2: เชื่อมต่อกับ Gemini ---
-client = genai.Client(api_key=API_KEY)
-MODEL = "gemini-2.5-flash"      # รุ่นฟรี เร็วและคุ้ม (ถ้า error ลองเปลี่ยนเป็น "gemini-2.0-flash")
+# ── ตั้งค่า Claude ───────────────────────────────────────────────────────────
+client = anthropic.Anthropic(api_key=API_KEY)
+MODEL  = "claude-sonnet-4-6"    # ประหยัดกว่า: claude-haiku-4-5-20251001
 
-# --- ขั้นที่ 3: กำหนด "บุคลิก/หน้าที่" ของ Agent (System Prompt) ---
-# ตรงนี้คือหัวใจ! เราบอกว่า Agent เป็นใคร ทำงานยังไง พูดภาษาอะไร
-SYSTEM_PROMPT = """คุณคือนักการตลาดคอนเทนต์มืออาชีพของไทย
-หน้าที่ของคุณคือช่วยเขียนแคปชั่นและโพสต์โซเชียลมีเดียที่ดึงดูด น่าสนใจ และกระตุ้นให้คนอยากซื้อ
+# ── Slack (optional) ─────────────────────────────────────────────────────────
+SLACK_TOKEN   = os.getenv("SLACK_BOT_TOKEN")
+SLACK_CHANNEL = os.getenv("SLACK_CHANNEL_ID") or os.getenv("SLACK_NEWS_CHANNEL_ID")
+
+# ── System Prompt ─────────────────────────────────────────────────────────────
+SYSTEM_PROMPT = """คุณคือนักการตลาดคอนเทนต์มืออาชีพของบริษัท Jet8 (Freight Forwarder นำเข้า-ส่งออกอาหารและยาในไทย)
+หน้าที่ของคุณคือช่วยเขียนคอนเทนต์สำหรับโซเชียลมีเดียและเว็บไซต์ที่ดึงดูด น่าเชื่อถือ และกระตุ้นให้กลุ่มเป้าหมายสนใจ
 
 กติกาการเขียน:
-- เขียนเป็นภาษาไทยที่เป็นธรรมชาติ อ่านลื่น
+- เขียนเป็นภาษาไทยที่เป็นธรรมชาติ อ่านลื่น มืออาชีพ
 - มี hook (ประโยคเปิด) ที่สะดุดตาในบรรทัดแรก
-- ใส่อิโมจิพอประมาณ ให้ดูมีชีวิตชีวาแต่ไม่รก
-- ปิดท้ายด้วย call-to-action (ชวนให้ทำอะไรต่อ เช่น ทักแชท สั่งเลย)
+- เน้นความเชี่ยวชาญด้านนำเข้า-ส่งออก โดยเฉพาะอาหารและยา
+- ใส่อิโมจิพอประมาณ (ไม่เกิน 5 ตัว) ให้ดูมีชีวิตชีวา
+- ปิดท้ายด้วย call-to-action ที่ชัดเจน
 - แนะนำ hashtag ที่เกี่ยวข้อง 3-5 อัน
 """
 
-# เก็บจำนวนโทเคนของการเรียกครั้งล่าสุด (ไฟล์อื่นมาอ่านค่านี้ได้)
+# เก็บจำนวนโทเคนของการเรียกครั้งล่าสุด
 last_usage = {"input": 0, "output": 0, "total": 0}
 
-# --- ขั้นที่ 4: ฟังก์ชันหลัก — ส่งโจทย์ไปให้ Agent แล้วรับคำตอบ ---
-def generate_content(user_request: str) -> str:
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=user_request,
-        config={"system_instruction": SYSTEM_PROMPT},   # ใส่บุคลิกที่ตั้งไว้
-    )
-    # ดึงจำนวนโทเคนที่ใช้ไปจากผลลัพธ์ (Gemini แนบมาให้เสมอ)
-    u = response.usage_metadata
-    last_usage["input"] = u.prompt_token_count or 0
-    last_usage["output"] = u.candidates_token_count or 0
-    last_usage["total"] = u.total_token_count or 0
-    return response.text
 
-# --- ขั้นที่ 5: ส่วนที่รันจริง — ถามผู้ใช้แล้วให้ Agent ทำงาน ---
+def send_to_slack(message: str) -> bool:
+    """ส่งข้อความไป Slack (ข้ามเงียบๆ ถ้าไม่มี token)"""
+    if not SLACK_TOKEN or not SLACK_CHANNEL:
+        return False
+    try:
+        slack = WebClient(token=SLACK_TOKEN)
+        slack.chat_postMessage(channel=SLACK_CHANNEL, text=message)
+        return True
+    except SlackApiError as e:
+        print(f"⚠️ Slack error: {e.response['error']}")
+        return False
+
+
+def generate_content(user_request: str, post_to_slack: bool = False) -> str:
+    """รับโจทย์ → เรียก Claude → คืนค่า Content"""
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=2048,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_request}],
+    )
+    last_usage["input"]  = response.usage.input_tokens
+    last_usage["output"] = response.usage.output_tokens
+    last_usage["total"]  = response.usage.input_tokens + response.usage.output_tokens
+
+    result = response.content[0].text
+
+    if post_to_slack:
+        send_to_slack(result)
+
+    return result
+
+
 if __name__ == "__main__":
     print("=" * 50)
-    print("✍️  Content Agent — ผู้ช่วยเขียนคอนเทนต์การตลาด")
+    print("✍️  Content Agent 02 — ผู้ช่วยเขียนคอนเทนต์")
     print("=" * 50)
-    print("ลองพิมพ์โจทย์ เช่น: เขียนแคปชั่นขายกาแฟดริปคั่วใหม่ สำหรับ Facebook")
-    print("(พิมพ์ 'exit' เพื่อออก)\n")
-
     while True:
-        user_request = input("📝 โจทย์ของคุณ: ").strip()
-
-        if user_request.lower() in ("exit", "quit", "ออก"):
-            print("👋 บายครับ แล้วเจอกันใหม่!")
+        req = input("📝 โจทย์: ").strip()
+        if req.lower() in ("exit", "quit", "ออก"):
             break
-
-        if not user_request:
-            continue        # ถ้าไม่พิมพ์อะไร ให้ถามใหม่
-
+        if not req:
+            continue
         print("\n🤔 กำลังคิด...\n")
-        result = generate_content(user_request)
-        print("-" * 50)
-        print(result)
-        print("-" * 50 + "\n")
+        print(generate_content(req))
+        print(f"\n🔢 Tokens: {last_usage['total']:,}\n")
