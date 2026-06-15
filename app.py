@@ -1,5 +1,5 @@
 # ============================================================
-#  app.py — MARKETING OPS v3.0 🎮
+#  app.py — MARKETING OPS v0.3 🎮
 #  Tab 1: CONTENT MISSION  — Research + Content + QC
 #  Tab 2: NEWS PIPELINE    — News Scout → Analyst → Content + QC
 #  Agent 00: SUPERVISOR (Claude Opus) — ตรวจ QC ทุก output
