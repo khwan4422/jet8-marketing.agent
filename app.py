@@ -15,7 +15,7 @@ load_dotenv()
 TH = timezone(timedelta(hours=7))
 
 # ── ตั้งค่าหน้า ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="🟡", layout="wide")
+st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="📑", layout="wide")
 
 # ── โหลด Secrets (สำหรับ deploy บน Streamlit Cloud) ─────────────────────────
 for key in ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "SLACK_BOT_TOKEN",
