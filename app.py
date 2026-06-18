@@ -6,8 +6,10 @@
 
 import os
 import json
+import base64
 from datetime import datetime, timezone, timedelta
 import streamlit as st
+import requests as _requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,7 +17,7 @@ load_dotenv()
 TH = timezone(timedelta(hours=7))
 
 # ── ตั้งค่าหน้า ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="📑", layout="wide")
+st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="🟡", layout="wide")
 
 # ── โหลด Secrets (สำหรับ deploy บน Streamlit Cloud) ─────────────────────────
 for key in ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "SLACK_BOT_TOKEN",
@@ -70,6 +72,12 @@ try:
     EVENT_OK = True
 except Exception:
     EVENT_OK = False
+
+try:
+    import trend_summarizer
+    TREND_OK = True
+except Exception:
+    TREND_OK = False
 
 # ── CSS — ธีมนีออน Retro + Pac-Man 🟡 ─────────────────────────────────────────
 st.markdown("""
@@ -327,6 +335,8 @@ if "content_req"     not in st.session_state:
     st.session_state.content_req = ""      # pre-fill text area จาก Planner
 if "clickup_ctx_ch"  not in st.session_state:
     st.session_state.clickup_ctx_ch = ""   # ClickUp channel ที่เลือกเป็น context
+if "last_generated"  not in st.session_state:
+    st.session_state.last_generated = None  # เก็บผล content ล่าสุด (fix review bug)
 
 
 def _add_tokens(label: str, n: int):
@@ -354,8 +364,52 @@ os.makedirs(PLANS_DIR, exist_ok=True)
 def _plan_path(month: int, year: int) -> str:
     return os.path.join(PLANS_DIR, f"plan_{year}_{month:02d}.json")
 
+
+def _github_commit_plan(month: int, year: int, json_str: str) -> bool:
+    """
+    Commit แผนขึ้น GitHub repo เพื่อ persist ข้ามการ restart
+    ต้องตั้ง GITHUB_TOKEN และ GITHUB_REPO ใน Streamlit secrets หรือ .env
+    เช่น  GITHUB_REPO = "username/jet8-marketing-ops"
+    """
+    try:
+        token = os.getenv("GITHUB_TOKEN", "")
+        repo  = os.getenv("GITHUB_REPO",  "")
+        # ลอง st.secrets ถ้า env ว่าง
+        if not token:
+            try:    token = st.secrets.get("GITHUB_TOKEN", "")
+            except: pass
+        if not repo:
+            try:    repo  = st.secrets.get("GITHUB_REPO",  "")
+            except: pass
+        if not token or not repo:
+            return False   # ยังไม่ตั้งค่า — ข้าม
+
+        path    = f"data/plans/plan_{year}_{month:02d}.json"
+        url     = f"https://api.github.com/repos/{repo}/contents/{path}"
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept":        "application/vnd.github.v3+json",
+        }
+        # ดึง SHA ของไฟล์เก่า (ถ้ามี) — จำเป็นสำหรับ update
+        r   = _requests.get(url, headers=headers, timeout=10)
+        sha = r.json().get("sha") if r.status_code == 200 else None
+
+        payload = {
+            "message": f"💾 Plan: {month:02d}/{year}",
+            "content": base64.b64encode(json_str.encode()).decode(),
+            "branch":  "main",
+        }
+        if sha:
+            payload["sha"] = sha
+
+        resp = _requests.put(url, headers=headers, json=payload, timeout=15)
+        return resp.status_code in (200, 201)
+    except Exception:
+        return False   # ไม่ crash แอป — แค่ไม่ commit
+
+
 def save_plan(month: int, year: int, content: str):
-    path = _plan_path(month, year)
+    path     = _plan_path(month, year)
     existing = load_plan(month, year)
     data = {
         "month":      month,
@@ -364,8 +418,11 @@ def save_plan(month: int, year: int, content: str):
         "saved_at":   existing.get("saved_at", datetime.now(TH).isoformat()),
         "updated_at": datetime.now(TH).isoformat(),
     }
+    json_str = _json.dumps(data, ensure_ascii=False, indent=2)
     with open(path, "w", encoding="utf-8") as f:
-        _json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write(json_str)
+    # sync ขึ้น GitHub — ถ้าตั้งค่าไว้จะ commit, ถ้าไม่ก็ข้ามเงียบๆ
+    _github_commit_plan(month, year, json_str)
 
 def load_plan(month: int, year: int) -> dict:
     path = _plan_path(month, year)
@@ -484,9 +541,12 @@ with t1:
 
             if gen_btn:
                 pm_plan.markdown(pacman_html("working"), unsafe_allow_html=True)
+                # โหลดเทรนด์ล่าสุด (ถ้ามี) ส่งเข้า Planner เพื่อให้แผนตรงกับตลาด
+                trends_ctx = trend_summarizer.get_latest_trend_for_planner() if TREND_OK else ""
                 plan = planner_agent.generate_plan(
                     month=sel_month, year=sel_year,
                     focus=focus_text, events=month_events or None,
+                    trends_context=trends_ctx,
                 )
                 pm_plan.markdown(pacman_html("done"), unsafe_allow_html=True)
                 _add_tokens("Planner", planner_agent.last_usage["total"])
@@ -504,7 +564,7 @@ with t1:
                 st.markdown(f'<div class="minor">🔢 Tokens: {planner_agent.last_usage["total"]:,}</div>',
                     unsafe_allow_html=True)
 
-                bc1, bc2 = st.columns(2)
+                bc1, bc2, bc3 = st.columns(3)
                 with bc1:
                     if st.button("✅ ใช้แผนนี้ — บันทึกเข้าระบบ", use_container_width=True):
                         save_plan(sel_month, sel_year, plan)
@@ -515,12 +575,44 @@ with t1:
                     st.download_button("⬇ ดาวน์โหลด (.md)", data=plan,
                         file_name=f"plan_{sel_year}_{sel_month:02d}.md",
                         mime="text/markdown", use_container_width=True)
+                with bc3:
+                    plan_json = _json.dumps({
+                        "month": sel_month, "year": sel_year, "content": plan,
+                        "saved_at": datetime.now(TH).isoformat(),
+                        "updated_at": datetime.now(TH).isoformat(),
+                    }, ensure_ascii=False, indent=2)
+                    st.download_button("⬇ บันทึก (.json)", data=plan_json,
+                        file_name=f"plan_{sel_year}_{sel_month:02d}.json",
+                        mime="application/json", use_container_width=True,
+                        help="ดาวน์โหลดเพื่ออัปโหลดกลับได้เมื่อแอปรีสตาร์ท")
             elif not gen_btn:
                 st.markdown('<div class="minor">// เลือกเดือน แล้วกด "สร้างแผนใหม่"</div>',
                     unsafe_allow_html=True)
 
+        # ── แจ้งเตือนบน Streamlit Cloud ───────────────────────────────────
+        _on_cloud = not os.path.exists(".env")   # ไม่มี .env = น่าจะรันบน cloud
+        if _on_cloud:
+            st.info(
+                "☁️ **รันบน Streamlit Cloud** — แผนที่สร้างในหน้านี้จะหายเมื่อแอปรีสตาร์ท  \n"
+                "📥 **ดาวน์โหลดแผนไว้** และ **อัปโหลดกลับ** ด้านล่างได้เลยค่ะ"
+            )
+
         # ── ส่วนล่าง: แผนที่บันทึกไว้ (โหลด + แก้ไข) ─────────────────────
         st.divider()
+
+        # ── อัปโหลดแผนที่ดาวน์โหลดไว้ (สำหรับ Streamlit Cloud) ─────────────
+        with st.expander("📤 อัปโหลดแผนที่บันทึกไว้ (.json)", expanded=False):
+            uploaded_plan = st.file_uploader(
+                "เลือกไฟล์ plan_YYYY_MM.json", type=["json"], key="plan_upload")
+            if uploaded_plan is not None:
+                try:
+                    plan_data = _json.loads(uploaded_plan.read().decode("utf-8"))
+                    save_plan(plan_data["month"], plan_data["year"], plan_data["content"])
+                    st.success(f"✅ อัปโหลดแผน {planner_agent.THAI_MONTHS[plan_data['month']]} {plan_data['year']} สำเร็จ!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ ไฟล์ไม่ถูกต้อง: {e}")
+
         saved_plans = list_saved_plans()
         if saved_plans:
             st.markdown('<div class="panel-title">📂 แผนที่บันทึกไว้</div>', unsafe_allow_html=True)
@@ -596,6 +688,66 @@ with t2:
                         use_container_width=True)
                 else:
                     st.warning("⚠️ ไม่มีข่าวให้วิเคราะห์ — รัน Step 1 ก่อน")
+
+    # ── STEP 3 — TREND SUMMARIZER ──────────────────────────────────────────────
+    st.divider()
+    st.markdown('<div class="label">STEP 3 — สรุปเทรนด์รายเดือน (Trend Summarizer)</div>',
+        unsafe_allow_html=True)
+
+    if not TREND_OK:
+        st.error("❌ ไม่พบ trend_summarizer.py")
+    else:
+        tr_c1, tr_c2 = st.columns([1, 2])
+        with tr_c1:
+            # เลือกเดือน/ปีที่จะสรุป
+            tr_month = st.selectbox("เดือนที่จะสรุป", list(range(1, 13)),
+                index=(now_th.month - 2) % 12,        # default = เดือนที่แล้ว
+                format_func=lambda m: trend_summarizer.THAI_MONTHS[m],
+                key="tr_month")
+            tr_year  = st.number_input("ปี (ค.ศ.)", value=now_th.year
+                if now_th.month > 1 else now_th.year - 1,
+                step=1, min_value=2020, max_value=2035, key="tr_year")
+
+            # แสดงถ้ามีสรุปอยู่แล้ว
+            saved_trends = trend_summarizer.list_saved_trends()
+            saved_labels = [t["label"] for t in saved_trends]
+            check_label  = f"{trend_summarizer.THAI_MONTHS[tr_month]} {int(tr_year)}"
+            if check_label in saved_labels:
+                st.info(f"✅ มีสรุปเดือน {check_label} แล้ว — สร้างใหม่ได้เพื่ออัปเดต")
+
+            gen_trend_btn = st.button("► สรุปเทรนด์ (ใช้ Claude)", use_container_width=True)
+
+        with tr_c2:
+            pm_trend = st.empty()
+            pm_trend.markdown(pacman_html("idle"), unsafe_allow_html=True)
+
+            if gen_trend_btn:
+                pm_trend.markdown(pacman_html("working"), unsafe_allow_html=True)
+                trend_content, trend_path = trend_summarizer.generate_trend_summary(
+                    int(tr_month), int(tr_year))
+                pm_trend.markdown(pacman_html("done"), unsafe_allow_html=True)
+                _add_tokens("Trend", trend_summarizer.last_usage.get("total", 0))
+                st.success(f"✅ บันทึกแล้ว: {trend_path}")
+                st.markdown(trend_content)
+                st.download_button("⬇ ดาวน์โหลด (.md)", data=trend_content,
+                    file_name=os.path.basename(trend_path), mime="text/markdown",
+                    use_container_width=True)
+
+        # แสดงสรุปเทรนด์ที่มีอยู่แล้ว
+        if saved_trends:
+            st.markdown('<div class="label" style="margin-top:12px">📂 สรุปเทรนด์ที่บันทึกไว้</div>',
+                unsafe_allow_html=True)
+            for trend in saved_trends[:3]:   # แสดงแค่ 3 อันล่าสุด
+                with st.expander(f"📊 {trend['label']}"):
+                    st.markdown(trend["content"])
+                    st.download_button(
+                        "⬇ ดาวน์โหลด",
+                        data=trend["content"],
+                        file_name=os.path.basename(trend["filepath"]),
+                        mime="text/markdown",
+                        key=f"dl_trend_{trend['year']}_{trend['month']:02d}",
+                        use_container_width=True,
+                    )
 
 
 # ════════════════════════════════════════════════════════════════
@@ -799,10 +951,11 @@ with t5:
 
         with col2:
             pm_content = st.empty()
-            pm_content.markdown(pacman_html("idle"), unsafe_allow_html=True)
+
             if gen_btn_c:
                 if not content_request.strip():
                     st.warning("กรุณาใส่โจทย์ก่อน")
+                    pm_content.markdown(pacman_html("idle"), unsafe_allow_html=True)
                 else:
                     # เพิ่ม ClickUp context ถ้าเลือกไว้
                     full_req = content_request.strip()
@@ -822,17 +975,41 @@ with t5:
                         full_req, content_type=ctype, post_to_slack=post_slack)
                     pm_content.markdown(pacman_html("done"), unsafe_allow_html=True)
                     _add_tokens("Content", content_agent.last_usage["total"])
-                    st.markdown(result)
-                    st.markdown(f'<div class="minor">🔢 {content_agent.last_usage["total"]:,} tokens</div>',
-                        unsafe_allow_html=True)
+                    # ── เก็บผลใน session_state เพื่อให้ปุ่ม Review ทำงานได้ ──
+                    st.session_state.last_generated = {
+                        "content": result,
+                        "type":    ctype_label,
+                        "request": content_request,
+                        "tokens":  content_agent.last_usage["total"],
+                    }
+
+            # ── แสดงผล + ปุ่ม Review อยู่ "นอก" if gen_btn_c ────────────────
+            # สำคัญ: ถ้าปุ่ม Review ถูกกด Streamlit rerun → gen_btn_c = False
+            # แต่ last_generated ยังอยู่ใน session_state → ปุ่มแสดงผลถูกต้อง
+            if st.session_state.last_generated:
+                gen = st.session_state.last_generated
+                pm_content.markdown(pacman_html("done"), unsafe_allow_html=True)
+                st.markdown(gen["content"])
+                st.markdown(f'<div class="minor">🔢 {gen["tokens"]:,} tokens</div>',
+                    unsafe_allow_html=True)
+                rc1, rc2 = st.columns(2)
+                with rc1:
                     if st.button("📨 ส่งให้ Reviewer ตรวจ", use_container_width=True):
                         st.session_state.review_queue.append({
-                            "type":     ctype_label,
-                            "request":  content_request,
-                            "content":  result,
+                            "type":     gen["type"],
+                            "request":  gen["request"],
+                            "content":  gen["content"],
                             "added_at": now_th.strftime("%H:%M"),
                         })
+                        st.session_state.last_generated = None
                         st.success("✅ ส่งไปแท็บ ✅ Review แล้ว!")
+                        st.rerun()
+                with rc2:
+                    if st.button("🗑️ ล้าง / เขียนใหม่", use_container_width=True):
+                        st.session_state.last_generated = None
+                        st.rerun()
+            elif not gen_btn_c:
+                pm_content.markdown(pacman_html("idle"), unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════
