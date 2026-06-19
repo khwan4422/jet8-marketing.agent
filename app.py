@@ -345,38 +345,7 @@ def _add_tokens(label: str, n: int):
         st.session_state.tok_total += n
         st.session_state.tok_log.append((label, n))
 
-# ── Top Bar ───────────────────────────────────────────────────────────────────
-now_th = datetime.now(TH)
-_sync_ok   = github_configured()
-_sync_icon = "☁️ ซิงค์ GitHub ✅" if _sync_ok else "⚠️ ยังไม่ได้ตั้ง GitHub Sync"
-_sync_color = "#86efac" if _sync_ok else "#fbbf24"
-st.markdown(f"""
-<div class="topbar">
-  <span class="ttl">▣ MARKETING OPS v2.0 — JET8</span>
-  <span style="font-family:'VT323';font-size:1rem;color:{_sync_color};">{_sync_icon}</span>
-  <span class="clock">{now_th.strftime('%d/%m/%Y %H:%M')}</span>
-</div>
-""", unsafe_allow_html=True)
-
-if not _sync_ok:
-    st.warning(
-        "⚠️ **ข้อมูลจะหายเมื่อแอปรีสตาร์ท** — ยังไม่ได้ตั้งค่า GitHub Sync  \n"
-        "เพิ่มใน Streamlit Cloud → Settings → Secrets:  \n"
-        "```\nGITHUB_TOKEN = \"ghp_xxxxxxxxxxxx\"\n"
-        "GITHUB_REPO  = \"username/jet8-marketing-ops\"\n```  \n"
-        "วิธีสร้าง Token: GitHub → Settings → Developer settings → Personal access tokens → Generate (เลือก scope **repo**)"
-    )
-
-# ── Helper ───────────────────────────────────────────────────────────────────
-
-import json as _json
-
-PLANS_DIR = "data/plans"
-os.makedirs(PLANS_DIR, exist_ok=True)
-
-def _plan_path(month: int, year: int) -> str:
-    return os.path.join(PLANS_DIR, f"plan_{year}_{month:02d}.json")
-
+# ── GitHub Persistence Helpers ────────────────────────────────────────────────
 
 def _gh_token_repo() -> tuple[str, str]:
     """คืน (token, repo) จาก env หรือ st.secrets — คืน ("","") ถ้ายังไม่ตั้งค่า"""
@@ -429,6 +398,38 @@ def _github_commit_file(local_path: str, commit_msg: str = "") -> bool:
         return resp.status_code in (200, 201)
     except Exception:
         return False
+
+# ── Top Bar ───────────────────────────────────────────────────────────────────
+now_th = datetime.now(TH)
+_sync_ok   = github_configured()
+_sync_icon = "☁️ ซิงค์ GitHub ✅" if _sync_ok else "⚠️ ยังไม่ได้ตั้ง GitHub Sync"
+_sync_color = "#86efac" if _sync_ok else "#fbbf24"
+st.markdown(f"""
+<div class="topbar">
+  <span class="ttl">▣ MARKETING OPS v2.0 — JET8</span>
+  <span style="font-family:'VT323';font-size:1rem;color:{_sync_color};">{_sync_icon}</span>
+  <span class="clock">{now_th.strftime('%d/%m/%Y %H:%M')}</span>
+</div>
+""", unsafe_allow_html=True)
+
+if not _sync_ok:
+    st.warning(
+        "⚠️ **ข้อมูลจะหายเมื่อแอปรีสตาร์ท** — ยังไม่ได้ตั้งค่า GitHub Sync  \n"
+        "เพิ่มใน Streamlit Cloud → Settings → Secrets:  \n"
+        "```\nGITHUB_TOKEN = \"ghp_xxxxxxxxxxxx\"\n"
+        "GITHUB_REPO  = \"username/jet8-marketing-ops\"\n```  \n"
+        "วิธีสร้าง Token: GitHub → Settings → Developer settings → Personal access tokens → Generate (เลือก scope **repo**)"
+    )
+
+# ── Helper ───────────────────────────────────────────────────────────────────
+
+import json as _json
+
+PLANS_DIR = "data/plans"
+os.makedirs(PLANS_DIR, exist_ok=True)
+
+def _plan_path(month: int, year: int) -> str:
+    return os.path.join(PLANS_DIR, f"plan_{year}_{month:02d}.json")
 
 
 def save_plan(month: int, year: int, content: str):
