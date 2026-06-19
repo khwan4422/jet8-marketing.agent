@@ -347,12 +347,25 @@ def _add_tokens(label: str, n: int):
 
 # ── Top Bar ───────────────────────────────────────────────────────────────────
 now_th = datetime.now(TH)
+_sync_ok   = github_configured()
+_sync_icon = "☁️ ซิงค์ GitHub ✅" if _sync_ok else "⚠️ ยังไม่ได้ตั้ง GitHub Sync"
+_sync_color = "#86efac" if _sync_ok else "#fbbf24"
 st.markdown(f"""
 <div class="topbar">
   <span class="ttl">▣ MARKETING OPS v2.0 — JET8</span>
+  <span style="font-family:'VT323';font-size:1rem;color:{_sync_color};">{_sync_icon}</span>
   <span class="clock">{now_th.strftime('%d/%m/%Y %H:%M')}</span>
 </div>
 """, unsafe_allow_html=True)
+
+if not _sync_ok:
+    st.warning(
+        "⚠️ **ข้อมูลจะหายเมื่อแอปรีสตาร์ท** — ยังไม่ได้ตั้งค่า GitHub Sync  \n"
+        "เพิ่มใน Streamlit Cloud → Settings → Secrets:  \n"
+        "```\nGITHUB_TOKEN = \"ghp_xxxxxxxxxxxx\"\n"
+        "GITHUB_REPO  = \"username/jet8-marketing-ops\"\n```  \n"
+        "วิธีสร้าง Token: GitHub → Settings → Developer settings → Personal access tokens → Generate (เลือก scope **repo**)"
+    )
 
 # ── Helper ───────────────────────────────────────────────────────────────────
 
@@ -365,38 +378,48 @@ def _plan_path(month: int, year: int) -> str:
     return os.path.join(PLANS_DIR, f"plan_{year}_{month:02d}.json")
 
 
-def _github_commit_plan(month: int, year: int, json_str: str) -> bool:
+def _gh_token_repo() -> tuple[str, str]:
+    """คืน (token, repo) จาก env หรือ st.secrets — คืน ("","") ถ้ายังไม่ตั้งค่า"""
+    token = os.getenv("GITHUB_TOKEN", "")
+    repo  = os.getenv("GITHUB_REPO",  "")
+    try:
+        if not token: token = st.secrets.get("GITHUB_TOKEN", "")
+        if not repo:  repo  = st.secrets.get("GITHUB_REPO",  "")
+    except Exception:
+        pass
+    return token, repo
+
+def github_configured() -> bool:
+    t, r = _gh_token_repo()
+    return bool(t and r)
+
+def _github_commit_file(local_path: str, commit_msg: str = "") -> bool:
     """
-    Commit แผนขึ้น GitHub repo เพื่อ persist ข้ามการ restart
-    ต้องตั้ง GITHUB_TOKEN และ GITHUB_REPO ใน Streamlit secrets หรือ .env
-    เช่น  GITHUB_REPO = "username/jet8-marketing-ops"
+    Commit ไฟล์ local ขึ้น GitHub repo เพื่อ persist ข้ามการ restart
+    ต้องตั้ง GITHUB_TOKEN และ GITHUB_REPO ใน Streamlit Secrets:
+      GITHUB_TOKEN = "ghp_xxxx"
+      GITHUB_REPO  = "username/jet8-marketing-ops"
     """
     try:
-        token = os.getenv("GITHUB_TOKEN", "")
-        repo  = os.getenv("GITHUB_REPO",  "")
-        # ลอง st.secrets ถ้า env ว่าง
-        if not token:
-            try:    token = st.secrets.get("GITHUB_TOKEN", "")
-            except: pass
-        if not repo:
-            try:    repo  = st.secrets.get("GITHUB_REPO",  "")
-            except: pass
+        token, repo = _gh_token_repo()
         if not token or not repo:
-            return False   # ยังไม่ตั้งค่า — ข้าม
+            return False
+        if not os.path.exists(local_path):
+            return False
 
-        path    = f"data/plans/plan_{year}_{month:02d}.json"
-        url     = f"https://api.github.com/repos/{repo}/contents/{path}"
-        headers = {
-            "Authorization": f"token {token}",
-            "Accept":        "application/vnd.github.v3+json",
-        }
-        # ดึง SHA ของไฟล์เก่า (ถ้ามี) — จำเป็นสำหรับ update
+        with open(local_path, "rb") as f:
+            raw = f.read()
+
+        url     = f"https://api.github.com/repos/{repo}/contents/{local_path}"
+        headers = {"Authorization": f"token {token}",
+                   "Accept": "application/vnd.github.v3+json"}
+
         r   = _requests.get(url, headers=headers, timeout=10)
         sha = r.json().get("sha") if r.status_code == 200 else None
 
         payload = {
-            "message": f"💾 Plan: {month:02d}/{year}",
-            "content": base64.b64encode(json_str.encode()).decode(),
+            "message": commit_msg or f"💾 auto-save: {local_path}",
+            "content": base64.b64encode(raw).decode(),
             "branch":  "main",
         }
         if sha:
@@ -405,7 +428,7 @@ def _github_commit_plan(month: int, year: int, json_str: str) -> bool:
         resp = _requests.put(url, headers=headers, json=payload, timeout=15)
         return resp.status_code in (200, 201)
     except Exception:
-        return False   # ไม่ crash แอป — แค่ไม่ commit
+        return False
 
 
 def save_plan(month: int, year: int, content: str):
@@ -421,8 +444,7 @@ def save_plan(month: int, year: int, content: str):
     json_str = _json.dumps(data, ensure_ascii=False, indent=2)
     with open(path, "w", encoding="utf-8") as f:
         f.write(json_str)
-    # sync ขึ้น GitHub — ถ้าตั้งค่าไว้จะ commit, ถ้าไม่ก็ข้ามเงียบๆ
-    _github_commit_plan(month, year, json_str)
+    _github_commit_file(path, f"💾 Plan: {month:02d}/{year}")
 
 def load_plan(month: int, year: int) -> dict:
     path = _plan_path(month, year)
@@ -541,13 +563,19 @@ with t1:
 
             if gen_btn:
                 pm_plan.markdown(pacman_html("working"), unsafe_allow_html=True)
-                # โหลดเทรนด์ล่าสุด (ถ้ามี) ส่งเข้า Planner เพื่อให้แผนตรงกับตลาด
                 trends_ctx = trend_summarizer.get_latest_trend_for_planner() if TREND_OK else ""
-                plan = planner_agent.generate_plan(
-                    month=sel_month, year=sel_year,
-                    focus=focus_text, events=month_events or None,
-                    trends_context=trends_ctx,
-                )
+                try:
+                    plan = planner_agent.generate_plan(
+                        month=sel_month, year=sel_year,
+                        focus=focus_text, events=month_events or None,
+                        trends_context=trends_ctx,
+                    )
+                except TypeError:
+                    # planner.py เวอร์ชันเก่า (ยังไม่มี trends_context) — fallback
+                    plan = planner_agent.generate_plan(
+                        month=sel_month, year=sel_year,
+                        focus=focus_text, events=month_events or None,
+                    )
                 pm_plan.markdown(pacman_html("done"), unsafe_allow_html=True)
                 _add_tokens("Planner", planner_agent.last_usage["total"])
                 st.session_state.generated_plan   = plan
@@ -564,7 +592,7 @@ with t1:
                 st.markdown(f'<div class="minor">🔢 Tokens: {planner_agent.last_usage["total"]:,}</div>',
                     unsafe_allow_html=True)
 
-                bc1, bc2, bc3 = st.columns(3)
+                bc1, bc2 = st.columns(2)
                 with bc1:
                     if st.button("✅ ใช้แผนนี้ — บันทึกเข้าระบบ", use_container_width=True):
                         save_plan(sel_month, sel_year, plan)
@@ -575,16 +603,6 @@ with t1:
                     st.download_button("⬇ ดาวน์โหลด (.md)", data=plan,
                         file_name=f"plan_{sel_year}_{sel_month:02d}.md",
                         mime="text/markdown", use_container_width=True)
-                with bc3:
-                    plan_json = _json.dumps({
-                        "month": sel_month, "year": sel_year, "content": plan,
-                        "saved_at": datetime.now(TH).isoformat(),
-                        "updated_at": datetime.now(TH).isoformat(),
-                    }, ensure_ascii=False, indent=2)
-                    st.download_button("⬇ บันทึก (.json)", data=plan_json,
-                        file_name=f"plan_{sel_year}_{sel_month:02d}.json",
-                        mime="application/json", use_container_width=True,
-                        help="ดาวน์โหลดเพื่ออัปโหลดกลับได้เมื่อแอปรีสตาร์ท")
             elif not gen_btn:
                 st.markdown('<div class="minor">// เลือกเดือน แล้วกด "สร้างแผนใหม่"</div>',
                     unsafe_allow_html=True)
@@ -837,6 +855,7 @@ with t4:
                         name=ev_name, start_date=str(ev_start), end_date=str(ev_end),
                         purpose=ev_purpose, channel=ev_channel, notes=ev_notes,
                     )
+                    _github_commit_file("data/events.json", f"💾 Event: {ev_name}")
                     st.success(f'✅ บันทึก "{ev_name}" แล้ว!')
                     st.rerun()
 
@@ -872,6 +891,7 @@ with t4:
 
                     if st.button("🗑️ ลบ", key=f"del_{ev['id']}"):
                         event_tracker.delete_event(ev["id"])
+                        _github_commit_file("data/events.json", f"🗑️ Del event: {ev['name']}")
                         st.rerun()
 
 
