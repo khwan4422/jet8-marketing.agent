@@ -17,7 +17,7 @@ load_dotenv()
 TH = timezone(timedelta(hours=7))
 
 # ── ตั้งค่าหน้า ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="🗃️", layout="wide")
+st.set_page_config(page_title="MARKETING OPS v2.0", page_icon="🟡", layout="wide")
 
 # ── โหลด Secrets (สำหรับ deploy บน Streamlit Cloud) ─────────────────────────
 for key in ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "SLACK_BOT_TOKEN",
@@ -1099,8 +1099,28 @@ with t6:
                             if not cmt:
                                 st.warning("กรุณาใส่ความคิดเห็นก่อนส่งกลับ")
                             else:
+                                _ctype_map_rev = {
+                                    "Facebook Post":     "facebook",
+                                    "LinkedIn Post":     "linkedin",
+                                    "คอนเทนต์เว็บไซต์": "website",
+                                }
+                                ctype_rev = _ctype_map_rev.get(
+                                    item.get("type", ""), "facebook")
+                                rev_prompt = (
+                                    f"แก้ไขคอนเทนต์ต่อไปนี้ตาม feedback ที่ได้รับ "
+                                    f"รักษาโทน สไตล์ และจุดประสงค์เดิมไว้\n\n"
+                                    f"**feedback / สิ่งที่ต้องแก้ไข:**\n{cmt}\n\n"
+                                    f"**คอนเทนต์เดิม:**\n{item['content']}"
+                                )
+                                with st.spinner("🤖 AI กำลังแก้ไขคอนเทนต์..."):
+                                    revised = content_agent.generate_content(
+                                        rev_prompt, content_type=ctype_rev)
+                                _add_tokens("Revise", content_agent.last_usage["total"])
+                                st.session_state.review_queue[i]["content"]  = revised
                                 st.session_state.review_queue[i]["feedback"] = cmt
-                                st.info(f"📨 บันทึกความคิดเห็นแล้ว: {cmt[:60]}...")
+                                st.session_state.pop(f"qc_{i}", None)   # ล้าง QC เก่า
+                                st.success("✅ AI แก้ไขแล้ว! เลื่อนขึ้นดูคอนเทนต์ใหม่")
+                                st.rerun()
 
 # ── Footer: Token Counter ─────────────────────────────────────────────────────
 log_parts = " &nbsp;|&nbsp; ".join(
